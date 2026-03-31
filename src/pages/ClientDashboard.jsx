@@ -22,7 +22,7 @@ export default function ClientDashboard({ session }) {
   const [activeTab, setActiveTab] = useState('detail')
   const [form, setForm] = useState({
     event_type: 'Concert', event_name: '', event_date: '',
-    city: '', seats: 2, category: 'Tribune', budget: '', notes: ''
+    city: '', seats: 2, category: 'Fosse', budget: '', notes: ''
   })
 
   useEffect(() => { fetchOrders() }, [])
@@ -50,7 +50,7 @@ export default function ClientDashboard({ session }) {
 
   async function submitOrder() {
     await supabase.from('orders').insert({ ...form, client_id: session.user.id, status: 'received' })
-    setForm({ event_type: 'Concert', event_name: '', event_date: '', city: '', seats: 2, category: 'Tribune', budget: '', notes: '' })
+    setForm({ event_type: 'Concert', event_name: '', event_date: '', city: '', seats: 2, category: 'Fosse', budget: '', notes: '' })
     fetchOrders()
     setView('list')
   }
@@ -128,7 +128,7 @@ export default function ClientDashboard({ session }) {
                 { label: 'Date', key: 'event_date', type: 'date' },
                 { label: 'Ville', key: 'city', type: 'text', placeholder: 'Paris' },
                 { label: 'Nombre de places', key: 'seats', type: 'number' },
-                { label: 'Catégorie', key: 'category', type: 'select', options: ['Fosse', 'Tribune', 'Carré or', 'VIP', 'Loge'] },
+                { label: 'Catégorie', key: 'category', type: 'select', options: ['Fosse', 'Fosse Or', 'Catégorie 1', 'Catégorie 2', 'Catégorie 3', 'Catégorie 4', 'Carré Or', 'Loge / VIP'] },
                 { label: 'Budget max (optionnel)', key: 'budget', type: 'text', placeholder: '150€ par place' },
               ].map(f => (
                 <div key={f.key} className="mb-4">
