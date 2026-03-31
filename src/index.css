@@ -1,13 +1,26 @@
-<!doctype html>
-<html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/buypasslogo.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Buy Pass Tickets</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #0F1117;
+  color: #E2E8F0;
+  font-family: 'Inter', sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1A1D27;
+}
+::-webkit-scrollbar-thumb {
+  background: #2A2D3E;
+  border-radius: 3px;
+}
