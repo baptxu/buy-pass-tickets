@@ -105,8 +105,8 @@ export default function AdminDashboard({ session }) {
       {/* Sidebar */}
       <div className="w-56 bg-[#13151F] border-r border-[#2A2D3E] flex flex-col">
         <div className="px-5 py-5 border-b border-[#2A2D3E]">
-          <h1 className="text-lg font-bold text-[#4F8EF7]">Buy Pass Tickets</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Admin</p>
+          <img src="/BUY_PASS_LOGO.png" alt="Buy Pass" className="h-8" />
+          <p className="text-xs text-gray-500 mt-2">Admin</p>
         </div>
         <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
           <button onClick={() => setView('table')} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${view === 'table' || view === 'detail' ? 'bg-[#4F8EF7]/10 text-[#4F8EF7]' : 'text-gray-400 hover:text-white hover:bg-[#1A1D27]'}`}>
@@ -128,7 +128,7 @@ export default function AdminDashboard({ session }) {
         <div className="px-8 py-6">
 
           {/* TABLE VIEW */}
-          {(view === 'table') && (
+          {view === 'table' && (
             <>
               <div className="mb-6">
                 <h2 className="text-2xl font-bold text-white">Tableau de bord</h2>

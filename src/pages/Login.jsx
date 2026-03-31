@@ -35,8 +35,7 @@ export default function Login() {
     <div className="min-h-screen bg-[#0F1117] flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-[#4F8EF7]">Buy Pass Tickets</h1>
-          <p className="text-gray-400 mt-2">Votre espace billetterie personnalisé</p>
+          <img src="/BUY_PASS_LOGO.png" alt="Buy Pass" className="h-16 mx-auto" />
         </div>
         <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-2xl p-8">
           <div className="flex bg-[#0F1117] rounded-lg p-1 mb-6">
