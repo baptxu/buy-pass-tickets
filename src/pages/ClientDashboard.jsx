@@ -60,7 +60,7 @@ export default function ClientDashboard({ session }) {
   return (
     <div className="min-h-screen bg-[#0F1117]">
       <div className="bg-[#1A1D27] border-b border-[#2A2D3E] px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-[#4F8EF7]">Buy Pass Tickets</h1>
+        <img src="/buypasslogo.png" alt="Buy Pass" className="h-8" />
         <div className="flex items-center gap-4">
           <span className="text-gray-400 text-sm">{session.user.email}</span>
           <button onClick={logout} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg">Déconnexion</button>

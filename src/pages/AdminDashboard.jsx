@@ -29,15 +29,9 @@ export default function AdminDashboard({ session }) {
   useEffect(() => { fetchOrders() }, [])
 
   async function fetchOrders() {
-    const { data: ordersData } = await supabase
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const { data: ordersData } = await supabase.from('orders').select('*').order('created_at', { ascending: false })
     setOrders(ordersData || [])
-
-    const { data: profilesData } = await supabase
-      .from('profiles')
-      .select('id, full_name, phone')
+    const { data: profilesData } = await supabase.from('profiles').select('id, full_name, phone')
     const map = {}
     profilesData?.forEach(p => { map[p.id] = p })
     setProfiles(map)
@@ -49,39 +43,22 @@ export default function AdminDashboard({ session }) {
     setEditStatus(order.status)
     setEditTicket(order.ticket_url || '')
     setActiveTab('detail')
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('order_id', order.id)
-      .order('created_at')
+    const { data } = await supabase.from('messages').select('*').eq('order_id', order.id).order('created_at')
     setMessages(data || [])
     setView('detail')
   }
 
   async function saveOrder() {
-    await supabase.from('orders').update({
-      status: editStatus,
-      price: editPrice,
-      ticket_url: editTicket,
-    }).eq('id', selectedOrder.id)
+    await supabase.from('orders').update({ status: editStatus, price: editPrice, ticket_url: editTicket }).eq('id', selectedOrder.id)
     fetchOrders()
     setView('table')
   }
 
   async function sendMessage() {
     if (!newMsg.trim()) return
-    await supabase.from('messages').insert({
-      order_id: selectedOrder.id,
-      sender_id: session.user.id,
-      sender_role: 'admin',
-      content: newMsg
-    })
+    await supabase.from('messages').insert({ order_id: selectedOrder.id, sender_id: session.user.id, sender_role: 'admin', content: newMsg })
     setNewMsg('')
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('order_id', selectedOrder.id)
-      .order('created_at')
+    const { data } = await supabase.from('messages').select('*').eq('order_id', selectedOrder.id).order('created_at')
     setMessages(data || [])
   }
 
@@ -102,10 +79,9 @@ export default function AdminDashboard({ session }) {
 
   return (
     <div className="min-h-screen bg-[#0F1117] flex">
-      {/* Sidebar */}
       <div className="w-56 bg-[#13151F] border-r border-[#2A2D3E] flex flex-col">
         <div className="px-5 py-5 border-b border-[#2A2D3E]">
-          <img src="/BUY_PASS_LOGO.png" alt="Buy Pass" className="h-8" />
+          <img src="/buypasslogo.png" alt="Buy Pass" className="h-8" />
           <p className="text-xs text-gray-500 mt-2">Admin</p>
         </div>
         <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
@@ -123,18 +99,15 @@ export default function AdminDashboard({ session }) {
         </div>
       </div>
 
-      {/* Main */}
       <div className="flex-1 overflow-auto">
         <div className="px-8 py-6">
 
-          {/* TABLE VIEW */}
           {view === 'table' && (
             <>
               <div className="mb-6">
                 <h2 className="text-2xl font-bold text-white">Tableau de bord</h2>
                 <p className="text-gray-400 text-sm mt-1">Gestion de toutes vos commandes</p>
               </div>
-
               <div className="grid grid-cols-4 gap-4 mb-6">
                 {[
                   { label: 'Commandes actives', value: stats.active, color: 'text-[#4F8EF7]' },
@@ -148,7 +121,6 @@ export default function AdminDashboard({ session }) {
                   </div>
                 ))}
               </div>
-
               <div className="flex gap-3 mb-4 flex-wrap">
                 {['all', 'Concert', 'Football', 'Festival'].map(f => (
                   <button key={f} onClick={() => setFilterType(f)} className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${filterType === f ? 'bg-[#4F8EF7]/20 text-[#4F8EF7] border border-[#4F8EF7]/30' : 'border border-[#2A2D3E] text-gray-400 hover:text-white'}`}>
@@ -160,7 +132,6 @@ export default function AdminDashboard({ session }) {
                   {STATUS_KEYS.map(k => <option key={k} value={k}>{STATUS_MAP[k].label}</option>)}
                 </select>
               </div>
-
               <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl overflow-hidden">
                 <table className="w-full">
                   <thead>
@@ -190,9 +161,7 @@ export default function AdminDashboard({ session }) {
                             <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${s.color}`}>{s.label}</span>
                           </td>
                           <td className="px-4 py-3">
-                            <button onClick={() => openOrder(order)} className="text-xs border border-[#2A2D3E] hover:border-[#4F8EF7] text-gray-300 hover:text-[#4F8EF7] px-3 py-1.5 rounded-lg transition-all">
-                              Gérer
-                            </button>
+                            <button onClick={() => openOrder(order)} className="text-xs border border-[#2A2D3E] hover:border-[#4F8EF7] text-gray-300 hover:text-[#4F8EF7] px-3 py-1.5 rounded-lg transition-all">Gérer</button>
                           </td>
                         </tr>
                       )
@@ -204,7 +173,6 @@ export default function AdminDashboard({ session }) {
             </>
           )}
 
-          {/* KANBAN VIEW */}
           {view === 'kanban' && (
             <>
               <div className="mb-6">
@@ -238,7 +206,6 @@ export default function AdminDashboard({ session }) {
             </>
           )}
 
-          {/* DETAIL VIEW */}
           {view === 'detail' && selectedOrder && (
             <>
               <div className="flex items-center justify-between mb-6">
@@ -253,7 +220,6 @@ export default function AdminDashboard({ session }) {
                     </button>
                   ))}
                 </div>
-
                 {activeTab === 'detail' && (
                   <div className="grid grid-cols-2 gap-3">
                     {[
@@ -279,7 +245,6 @@ export default function AdminDashboard({ session }) {
                     )}
                   </div>
                 )}
-
                 {activeTab === 'messages' && (
                   <div>
                     <div className="flex flex-col gap-3 max-h-64 overflow-y-auto mb-4 p-2">
@@ -298,7 +263,6 @@ export default function AdminDashboard({ session }) {
                     </div>
                   </div>
                 )}
-
                 {activeTab === 'actions' && (
                   <div className="flex flex-col gap-4">
                     <div>
