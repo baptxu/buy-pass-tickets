@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-export default function Login() {
+export default function Login({ onShowAbout }) {
   const [mode, setMode] = useState('login') // login | register | forgot
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -57,6 +57,14 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img src="/buypasslogo.png" alt="Buy Pass" className="h-16 mx-auto" />
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <button
+              onClick={onShowAbout}
+              className="rounded-full border border-[#2A2D3E] px-3 py-1.5 text-xs text-gray-400 transition-all hover:text-white"
+            >
+              À propos
+            </button>
+          </div>
         </div>
         <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-2xl p-8">
 
