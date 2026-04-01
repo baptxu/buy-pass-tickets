@@ -15,7 +15,8 @@ const STATUS_KEYS = ['received', 'searching', 'proposed', 'payment', 'confirmed'
 export default function AdminDashboard({ session }) {
   const [orders, setOrders] = useState([])
   const [profiles, setProfiles] = useState({})
-  const [view, setView] = useState('table') // table | kanban | detail | analytics | clients | clientdetail
+  const [allProfiles, setAllProfiles] = useState([])
+  const [view, setView] = useState('table')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [selectedClient, setSelectedClient] = useState(null)
   const [messages, setMessages] = useState([])
@@ -29,15 +30,26 @@ export default function AdminDashboard({ session }) {
   const [editCost, setEditCost] = useState('')
   const [showArchived, setShowArchived] = useState(false)
 
-  useEffect(() => { fetchOrders() }, [])
+  useEffect(() => { fetchAll() }, [])
 
-  async function fetchOrders() {
-    const { data: ordersData } = await supabase.from('orders').select('*').order('created_at', { ascending: false })
+  async function fetchAll() {
+    // Charger les commandes
+    const { data: ordersData } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false })
     setOrders(ordersData || [])
-    const { data: profilesData } = await supabase.from('profiles').select('id, full_name, phone')
+
+    // Charger TOUS les profils clients
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'client')
+    
     const map = {}
     profilesData?.forEach(p => { map[p.id] = p })
     setProfiles(map)
+    setAllProfiles(profilesData || [])
   }
 
   async function openOrder(order) {
@@ -54,19 +66,19 @@ export default function AdminDashboard({ session }) {
 
   async function saveOrder() {
     await supabase.from('orders').update({ status: editStatus, price: editPrice, ticket_url: editTicket, cost: editCost }).eq('id', selectedOrder.id)
-    fetchOrders()
+    fetchAll()
     setView('table')
   }
 
   async function archiveOrder(orderId) {
     await supabase.from('orders').update({ archived: true }).eq('id', orderId)
-    fetchOrders()
+    fetchAll()
     setView('table')
   }
 
   async function unarchiveOrder(orderId) {
     await supabase.from('orders').update({ archived: false }).eq('id', orderId)
-    fetchOrders()
+    fetchAll()
   }
 
   async function sendMessage() {
@@ -79,7 +91,6 @@ export default function AdminDashboard({ session }) {
 
   async function logout() { await supabase.auth.signOut() }
 
-  // Commandes actives (non archivées)
   const activeOrders = orders.filter(o => !o.archived)
   const archivedOrders = orders.filter(o => o.archived)
 
@@ -101,16 +112,12 @@ export default function AdminDashboard({ session }) {
   }, 0)
   const totalTickets = sentOrders.reduce((sum, o) => sum + (parseInt(o.seats) || 0), 0)
   const totalProfit = totalCA - totalCost
-
   const statusStats = STATUS_KEYS.map(k => ({ key: k, label: STATUS_MAP[k].label, count: activeOrders.filter(o => o.status === k).length }))
 
-  // Clients uniques
-  const uniqueClients = Object.values(profiles)
   const clientOrders = (clientId) => activeOrders.filter(o => o.client_id === clientId)
 
   return (
     <div className="min-h-screen bg-[#0F1117] flex">
-      {/* Sidebar */}
       <div className="w-56 bg-[#13151F] border-r border-[#2A2D3E] flex flex-col">
         <div className="px-5 py-5 border-b border-[#2A2D3E]">
           <img src="/buypasslogo.png" alt="Buy Pass" className="h-8" />
@@ -135,7 +142,6 @@ export default function AdminDashboard({ session }) {
         </div>
       </div>
 
-      {/* Contenu */}
       <div className="flex-1 overflow-auto">
         <div className="px-8 py-6">
 
@@ -151,8 +157,6 @@ export default function AdminDashboard({ session }) {
                   {showArchived ? '📦 Masquer archives' : `📦 Archives (${archivedOrders.length})`}
                 </button>
               </div>
-
-              {/* Stats rapides */}
               <div className="grid grid-cols-4 gap-4 mb-6">
                 {[
                   { label: 'Actives', value: activeOrders.filter(o => o.status !== 'sent').length, color: 'text-[#4F8EF7]' },
@@ -166,8 +170,6 @@ export default function AdminDashboard({ session }) {
                   </div>
                 ))}
               </div>
-
-              {/* Filtres */}
               <div className="flex gap-3 mb-4 flex-wrap">
                 {['all', 'Concert', 'Football', 'Festival'].map(f => (
                   <button key={f} onClick={() => setFilterType(f)} className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${filterType === f ? 'bg-[#4F8EF7]/20 text-[#4F8EF7] border border-[#4F8EF7]/30' : 'border border-[#2A2D3E] text-gray-400 hover:text-white'}`}>
@@ -179,8 +181,6 @@ export default function AdminDashboard({ session }) {
                   {STATUS_KEYS.map(k => <option key={k} value={k}>{STATUS_MAP[k].label}</option>)}
                 </select>
               </div>
-
-              {/* Tableau commandes actives */}
               <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl overflow-hidden mb-6">
                 <table className="w-full">
                   <thead>
@@ -220,8 +220,6 @@ export default function AdminDashboard({ session }) {
                 </table>
                 {filtered.length === 0 && <p className="text-center text-gray-500 py-12">Aucune commande</p>}
               </div>
-
-              {/* Commandes archivées */}
               {showArchived && (
                 <div className="bg-[#1A1D27] border border-orange-400/20 rounded-xl overflow-hidden">
                   <div className="px-4 py-3 border-b border-[#2A2D3E]">
@@ -291,8 +289,6 @@ export default function AdminDashboard({ session }) {
                 <h2 className="text-2xl font-bold text-white">Analytics</h2>
                 <p className="text-gray-400 text-sm mt-1">Vue d'ensemble de votre activité</p>
               </div>
-
-              {/* KPIs */}
               <div className="grid grid-cols-4 gap-4 mb-8">
                 {[
                   { label: 'CA Total', value: totalCA.toFixed(0) + '€', sub: 'Commandes envoyées', color: 'text-green-400' },
@@ -307,8 +303,6 @@ export default function AdminDashboard({ session }) {
                   </div>
                 ))}
               </div>
-
-              {/* Commandes par statut */}
               <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-6 mb-6">
                 <h3 className="text-white font-semibold mb-4">Commandes par statut</h3>
                 <div className="flex flex-col gap-3">
@@ -323,8 +317,6 @@ export default function AdminDashboard({ session }) {
                   ))}
                 </div>
               </div>
-
-              {/* Dernières commandes avec prix */}
               <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-6">
                 <h3 className="text-white font-semibold mb-4">Commandes avec prix</h3>
                 <table className="w-full">
@@ -362,37 +354,33 @@ export default function AdminDashboard({ session }) {
             <>
               <div className="mb-6">
                 <h2 className="text-2xl font-bold text-white">Clients</h2>
-                <p className="text-gray-400 text-sm mt-1">{uniqueClients.length} client{uniqueClients.length > 1 ? 's' : ''} enregistré{uniqueClients.length > 1 ? 's' : ''}</p>
+                <p className="text-gray-400 text-sm mt-1">{allProfiles.length} client{allProfiles.length > 1 ? 's' : ''} enregistré{allProfiles.length > 1 ? 's' : ''}</p>
               </div>
               <div className="grid grid-cols-1 gap-4">
-                {uniqueClients.map(client => {
-                  const orders = clientOrders(client.id)
-                  const lastOrder = orders[0]
+                {allProfiles.map(client => {
+                  const cOrders = clientOrders(client.id)
+                  const lastOrder = cOrders[0]
                   return (
                     <div key={client.id} onClick={() => { setSelectedClient(client); setView('clientdetail') }} className="bg-[#1A1D27] border border-[#2A2D3E] hover:border-[#4F8EF7] rounded-xl p-5 cursor-pointer transition-all">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          {client.avatar_url ? (
-                            <img src={client.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full bg-[#4F8EF7]/20 flex items-center justify-center text-[#4F8EF7] font-bold">
-                              {client.full_name?.[0]?.toUpperCase() || '?'}
-                            </div>
-                          )}
+                          <div className="w-10 h-10 rounded-full bg-[#4F8EF7]/20 flex items-center justify-center text-[#4F8EF7] font-bold">
+                            {client.full_name?.[0]?.toUpperCase() || '?'}
+                          </div>
                           <div>
                             <p className="text-white font-medium">{client.full_name || 'Client inconnu'}</p>
                             <p className="text-gray-500 text-xs">{client.phone || 'Pas de téléphone'}</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm text-white">{orders.length} commande{orders.length > 1 ? 's' : ''}</p>
+                          <p className="text-sm text-white">{cOrders.length} commande{cOrders.length > 1 ? 's' : ''}</p>
                           {lastOrder && <p className="text-xs text-gray-500 mt-0.5">Dernière : {lastOrder.event_name}</p>}
                         </div>
                       </div>
                     </div>
                   )
                 })}
-                {uniqueClients.length === 0 && <p className="text-center text-gray-500 py-16">Aucun client</p>}
+                {allProfiles.length === 0 && <p className="text-center text-gray-500 py-16">Aucun client</p>}
               </div>
             </>
           )}
@@ -402,13 +390,9 @@ export default function AdminDashboard({ session }) {
             <>
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  {selectedClient.avatar_url ? (
-                    <img src={selectedClient.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover" />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-[#4F8EF7]/20 flex items-center justify-center text-[#4F8EF7] font-bold text-lg">
-                      {selectedClient.full_name?.[0]?.toUpperCase() || '?'}
-                    </div>
-                  )}
+                  <div className="w-12 h-12 rounded-full bg-[#4F8EF7]/20 flex items-center justify-center text-[#4F8EF7] font-bold text-lg">
+                    {selectedClient.full_name?.[0]?.toUpperCase() || '?'}
+                  </div>
                   <div>
                     <h2 className="text-xl font-bold text-white">{selectedClient.full_name || 'Client'}</h2>
                     <p className="text-gray-400 text-sm">{selectedClient.phone || 'Pas de téléphone'}</p>
@@ -452,7 +436,6 @@ export default function AdminDashboard({ session }) {
                     </button>
                   ))}
                 </div>
-
                 {activeTab === 'detail' && (
                   <div className="grid grid-cols-2 gap-3">
                     {[
@@ -478,7 +461,6 @@ export default function AdminDashboard({ session }) {
                     )}
                   </div>
                 )}
-
                 {activeTab === 'messages' && (
                   <div>
                     <div className="flex flex-col gap-3 max-h-64 overflow-y-auto mb-4 p-2">
@@ -497,7 +479,6 @@ export default function AdminDashboard({ session }) {
                     </div>
                   </div>
                 )}
-
                 {activeTab === 'actions' && (
                   <div className="flex flex-col gap-4">
                     <div>
@@ -511,7 +492,7 @@ export default function AdminDashboard({ session }) {
                       <input value={editPrice} onChange={e => setEditPrice(e.target.value)} placeholder="Ex : 280€" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Coût d'achat (pour analytics)</label>
+                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Coût d'achat</label>
                       <input value={editCost} onChange={e => setEditCost(e.target.value)} placeholder="Ex : 200€" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
                     </div>
                     <div>
@@ -519,12 +500,8 @@ export default function AdminDashboard({ session }) {
                       <input value={editTicket} onChange={e => setEditTicket(e.target.value)} placeholder="https://ticketmaster.fr/transfer/..." className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
                     </div>
                     <div className="flex gap-3">
-                      <button onClick={saveOrder} className="flex-1 bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white py-2.5 rounded-lg text-sm font-medium">
-                        Enregistrer
-                      </button>
-                      <button onClick={() => archiveOrder(selectedOrder.id)} className="border border-orange-400/30 text-orange-400 hover:bg-orange-400/10 px-4 py-2.5 rounded-lg text-sm transition-all">
-                        📦 Archiver
-                      </button>
+                      <button onClick={saveOrder} className="flex-1 bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white py-2.5 rounded-lg text-sm font-medium">Enregistrer</button>
+                      <button onClick={() => archiveOrder(selectedOrder.id)} className="border border-orange-400/30 text-orange-400 hover:bg-orange-400/10 px-4 py-2.5 rounded-lg text-sm transition-all">📦 Archiver</button>
                     </div>
                   </div>
                 )}
