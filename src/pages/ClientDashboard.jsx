@@ -46,11 +46,11 @@ export default function ClientDashboard({ session }) {
   const [newMsg, setNewMsg] = useState('')
   const [activeTab, setActiveTab] = useState('detail')
   const [selectedEvent, setSelectedEvent] = useState(null)
+  const [isCustom, setIsCustom] = useState(false)
   const [form, setForm] = useState({
     event_type: 'Concert', event_name: '', event_date: '',
     city: '', seats: 2, category: '', budget: '', notes: ''
   })
-  const [isCustom, setIsCustom] = useState(false)
 
   useEffect(() => { fetchOrders(); fetchEvents() }, [])
 
@@ -66,22 +66,26 @@ export default function ClientDashboard({ session }) {
 
   function selectEvent(event) {
     setSelectedEvent(event)
+    setIsCustom(false)
     setForm(f => ({
       ...f,
       event_name: event.name,
       event_type: event.event_type,
-      event_date: event.date,
-      city: event.city,
+      event_date: '',
+      city: '',
       category: event.categories?.[0]?.name || '',
       budget: event.categories?.[0]?.price ? event.categories[0].price + '€' : '',
     }))
-    setIsCustom(false)
   }
 
   function selectCustom() {
     setSelectedEvent(null)
     setIsCustom(true)
     setForm({ event_type: 'Concert', event_name: '', event_date: '', city: '', seats: 2, category: '', budget: '', notes: '' })
+  }
+
+  function selectDate(d) {
+    setForm(f => ({ ...f, event_date: d.date, city: d.city }))
   }
 
   async function openOrder(order) {
@@ -111,6 +115,7 @@ export default function ClientDashboard({ session }) {
 
   async function logout() { await supabase.auth.signOut() }
 
+  const selectedDates = selectedEvent?.dates || []
   const selectedCats = selectedEvent?.categories || []
 
   return (
@@ -186,12 +191,19 @@ export default function ClientDashboard({ session }) {
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <p className="text-white font-semibold">{event.name}</p>
-                          <p className="text-gray-400 text-xs mt-0.5">{event.city} · {event.date} · {event.event_type}</p>
+                          <p className="text-gray-400 text-xs mt-0.5">{event.event_type}</p>
                         </div>
                         <span className="text-xs bg-[#4F8EF7]/10 text-[#4F8EF7] border border-[#4F8EF7]/20 px-2 py-0.5 rounded-full">{event.event_type}</span>
                       </div>
+                      {event.dates?.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {event.dates.map((d, i) => (
+                            <span key={i} className="text-xs bg-[#4F8EF7]/10 border border-[#4F8EF7]/20 text-[#4F8EF7] px-2 py-0.5 rounded-full">📅 {d.date} — {d.city}</span>
+                          ))}
+                        </div>
+                      )}
                       {event.categories?.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
+                        <div className="flex flex-wrap gap-1">
                           {event.categories.map((cat, i) => (
                             <span key={i} className="text-xs bg-[#0F1117] border border-[#2A2D3E] text-gray-300 px-2 py-0.5 rounded-full">{cat.name} — {cat.price}€</span>
                           ))}
@@ -206,15 +218,12 @@ export default function ClientDashboard({ session }) {
               </div>
             )}
 
-            {/* Étape 2 : Remplir le formulaire */}
+            {/* Étape 2 : Formulaire */}
             {(selectedEvent || isCustom) && (
               <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-6 max-w-lg">
                 {selectedEvent && (
                   <div className="flex items-center justify-between mb-4 pb-4 border-b border-[#2A2D3E]">
-                    <div>
-                      <p className="text-white font-semibold">{selectedEvent.name}</p>
-                      <p className="text-gray-400 text-xs">{selectedEvent.city} · {selectedEvent.date}</p>
-                    </div>
+                    <p className="text-white font-semibold">{selectedEvent.name}</p>
                     <button onClick={() => { setSelectedEvent(null); setIsCustom(false) }} className="text-xs text-gray-500 hover:text-white border border-[#2A2D3E] px-2 py-1 rounded-lg">Changer</button>
                   </div>
                 )}
@@ -222,7 +231,7 @@ export default function ClientDashboard({ session }) {
                 {isCustom && (
                   <>
                     <div className="mb-4">
-                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Type d'événement</label>
+                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Type</label>
                       <select value={form.event_type} onChange={e => setForm({...form, event_type: e.target.value})} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]">
                         {['Concert', 'Football', 'Festival', 'Autre'].map(o => <option key={o}>{o}</option>)}
                       </select>
@@ -233,7 +242,7 @@ export default function ClientDashboard({ session }) {
                     </div>
                     <div className="mb-4">
                       <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Date</label>
-                      <input type="date" value={form.event_date} onChange={e => setForm({...form, event_date: e.target.value})} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                      <input type="text" value={form.event_date} onChange={e => setForm({...form, event_date: e.target.value})} placeholder="Ex : 15/09/2026" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
                     </div>
                     <div className="mb-4">
                       <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Ville</label>
@@ -242,13 +251,29 @@ export default function ClientDashboard({ session }) {
                   </>
                 )}
 
-                <div className="mb-4">
-                  <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Nombre de places</label>
-                  <input type="number" value={form.seats} onChange={e => setForm({...form, seats: e.target.value})} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
-                </div>
+                {/* Sélection date si événement prédéfini */}
+                {selectedEvent && selectedDates.length > 0 && (
+                  <div className="mb-4">
+                    <label className="text-xs text-gray-400 uppercase tracking-wider mb-2 block">Choisir une date</label>
+                    <div className="flex flex-col gap-2">
+                      {selectedDates.map((d, i) => (
+                        <div key={i} onClick={() => selectDate(d)} className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${form.event_date === d.date && form.city === d.city ? 'border-[#4F8EF7] bg-[#4F8EF7]/10' : 'border-[#2A2D3E] bg-[#0F1117] hover:border-[#4F8EF7]/50'}`}>
+                          <span className="text-sm text-white">📅 {d.date}</span>
+                          <span className="text-sm text-gray-400">📍 {d.city}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="mb-4">
-                  <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Catégorie</label>
+                  <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Nombre de places</label>
+                  <input type="number" value={form.seats} onChange={e => setForm({...form, seats: e.target.value})} min="1" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                </div>
+
+                {/* Sélection catégorie */}
+                <div className="mb-4">
+                  <label className="text-xs text-gray-400 uppercase tracking-wider mb-2 block">Catégorie</label>
                   {selectedCats.length > 0 ? (
                     <div className="flex flex-col gap-2">
                       {selectedCats.map((cat, i) => (
@@ -263,16 +288,17 @@ export default function ClientDashboard({ session }) {
                   )}
                 </div>
 
+                {/* Récapitulatif prix */}
+                {form.category && form.budget && (
+                  <div className="mb-4 bg-[#1D9E75]/10 border border-[#1D9E75]/30 rounded-lg p-3">
+                    <p className="text-sm text-gray-300">💰 Prix estimé : <span className="text-[#1D9E75] font-bold">{parseInt(form.budget) * parseInt(form.seats) || form.budget}€</span> pour {form.seats} place{form.seats > 1 ? 's' : ''}</p>
+                  </div>
+                )}
+
                 {isCustom && (
                   <div className="mb-4">
                     <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Budget max (optionnel)</label>
                     <input type="text" value={form.budget} onChange={e => setForm({...form, budget: e.target.value})} placeholder="150€ par place" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
-                  </div>
-                )}
-
-                {form.category && form.budget && (
-                  <div className="mb-4 bg-[#1D9E75]/10 border border-[#1D9E75]/30 rounded-lg p-3">
-                    <p className="text-sm text-gray-300">💰 Prix estimé : <span className="text-[#1D9E75] font-bold">{parseInt(form.budget) * parseInt(form.seats) || form.budget}€</span> pour {form.seats} place{form.seats > 1 ? 's' : ''}</p>
                   </div>
                 )}
 
@@ -283,7 +309,7 @@ export default function ClientDashboard({ session }) {
 
                 <div className="flex gap-3 justify-end">
                   <button onClick={() => { setSelectedEvent(null); setIsCustom(false) }} className="border border-[#2A2D3E] text-gray-400 px-4 py-2 rounded-lg text-sm">← Retour</button>
-                  <button onClick={submitOrder} disabled={!form.event_name || !form.category} className="bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white px-6 py-2 rounded-lg text-sm font-medium disabled:opacity-50">Envoyer ma demande</button>
+                  <button onClick={submitOrder} disabled={!form.event_name || !form.category || !form.event_date} className="bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white px-6 py-2 rounded-lg text-sm font-medium disabled:opacity-50">Envoyer ma demande</button>
                 </div>
               </div>
             )}
