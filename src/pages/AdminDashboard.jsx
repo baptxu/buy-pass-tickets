@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useEffectEvent } from 'react'
 import { supabase } from '../lib/supabase'
 
 const STATUS_MAP = {
@@ -38,8 +38,6 @@ export default function AdminDashboard({ session }) {
   const [newCatName, setNewCatName] = useState('')
   const [newCatPrice, setNewCatPrice] = useState('')
 
-  useEffect(() => { fetchAll() }, [])
-
   async function fetchAll() {
     const { data: ordersData } = await supabase.from('orders').select('*').order('created_at', { ascending: false })
     setOrders(ordersData || [])
@@ -51,6 +49,12 @@ export default function AdminDashboard({ session }) {
     const { data: eventsData } = await supabase.from('events').select('*').order('created_at', { ascending: false })
     setEvents(eventsData || [])
   }
+
+  const loadAdminData = useEffectEvent(() => {
+    fetchAll()
+  })
+
+  useEffect(() => { loadAdminData() }, [])
 
   async function openOrder(order) {
     setSelectedOrder(order)
