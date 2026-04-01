@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useEffectEvent } from 'react'
 import { supabase } from '../lib/supabase'
+import CommunityHub from '../components/CommunityHub'
+import ClientProfile from '../components/ClientProfile'
 
 const STATUS_MAP = {
   received:  { label: 'Demande reçue',      color: 'bg-gray-500/20 text-gray-300' },
@@ -41,6 +43,8 @@ export default function ClientDashboard({ session }) {
   const [orders, setOrders] = useState([])
   const [events, setEvents] = useState([])
   const [view, setView] = useState('list')
+  const [communityNotice, setCommunityNotice] = useState('')
+  const [communityFocusGroupId, setCommunityFocusGroupId] = useState(null)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [messages, setMessages] = useState([])
   const [newMsg, setNewMsg] = useState('')
@@ -52,8 +56,6 @@ export default function ClientDashboard({ session }) {
     city: '', seats: 2, category: '', budget: '', notes: ''
   })
 
-  useEffect(() => { fetchOrders(); fetchEvents() }, [])
-
   async function fetchOrders() {
     const { data } = await supabase.from('orders').select('*').eq('client_id', session.user.id).order('created_at', { ascending: false })
     setOrders(data || [])
@@ -63,6 +65,42 @@ export default function ClientDashboard({ session }) {
     const { data } = await supabase.from('events').select('*').eq('active', true).order('created_at', { ascending: false })
     setEvents(data || [])
   }
+
+  const loadDashboardData = useEffectEvent(() => {
+    fetchOrders()
+    fetchEvents()
+  })
+
+  const acceptInviteFromUrl = useEffectEvent(async () => {
+    const params = new URLSearchParams(window.location.search)
+    const inviteToken = params.get('groupInvite')
+    if (!inviteToken) return
+
+    const { data, error } = await supabase.rpc('accept_group_invite', {
+      invite_token: inviteToken,
+    })
+
+    if (error) {
+      setCommunityNotice(`Invitation non acceptee: ${error.message}`)
+      setView('community')
+    } else {
+      setCommunityFocusGroupId(data)
+      setCommunityNotice('Invitation acceptee. Vous avez rejoint le groupe.')
+      setView('community')
+    }
+
+    params.delete('groupInvite')
+    const nextSearch = params.toString()
+    window.history.replaceState({}, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}`)
+  })
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [session.user.id])
+
+  useEffect(() => {
+    acceptInviteFromUrl()
+  }, [session.user.id])
 
   function selectEvent(event) {
     setSelectedEvent(event)
@@ -124,6 +162,8 @@ export default function ClientDashboard({ session }) {
         <button onClick={() => setView('list')}><img src="/buypasslogo.png" alt="Buy Pass" className="h-8" /></button>
         <div className="flex items-center gap-3">
           <button onClick={() => setView('cgu')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg transition-all">CGU</button>
+          <button onClick={() => setView('profile')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg transition-all">Profil</button>
+          <button onClick={() => setView('community')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg transition-all">Communauté</button>
           <span className="text-gray-400 text-sm hidden sm:block">{session.user.email}</span>
           <button onClick={logout} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg">Déconnexion</button>
         </div>
@@ -132,6 +172,25 @@ export default function ClientDashboard({ session }) {
       <div className="max-w-4xl mx-auto px-6 py-8">
 
         {view === 'cgu' && <PageCGU onBack={() => setView('list')} />}
+
+        {view === 'profile' && (
+          <ClientProfile
+            session={session}
+            orders={orders}
+            onBack={() => setView('list')}
+          />
+        )}
+
+        {view === 'community' && (
+          <CommunityHub
+            session={session}
+            orders={orders}
+            focusGroupId={communityFocusGroupId}
+            entryNotice={communityNotice}
+            onClearEntryNotice={() => setCommunityNotice('')}
+            onBack={() => setView('list')}
+          />
+        )}
 
         {view === 'list' && (
           <>

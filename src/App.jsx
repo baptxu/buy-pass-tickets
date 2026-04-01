@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { supabase } from './lib/supabase'
 import Login from './pages/Login'
 import AdminDashboard from './pages/AdminDashboard'
 import ClientDashboard from './pages/ClientDashboard'
+import CommunityPreview from './pages/CommunityPreview'
 
 function ResetPassword() {
   const [password, setPassword] = useState('')
@@ -53,10 +54,22 @@ function ResetPassword() {
 }
 
 function App() {
+  const searchParams = new URLSearchParams(window.location.search)
+  const previewMode = searchParams.get('preview')
   const [session, setSession] = useState(null)
   const [role, setRole] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isReset, setIsReset] = useState(false)
+
+  const fetchRole = useEffectEvent(async (userId) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single()
+    setRole(data?.role || 'client')
+    setLoading(false)
+  })
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -81,21 +94,15 @@ function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  async function fetchRole(userId) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .single()
-    setRole(data?.role || 'client')
-    setLoading(false)
-  }
-
   if (loading) return (
     <div className="flex items-center justify-center h-screen bg-[#0F1117]">
       <div className="text-[#4F8EF7] text-lg">Chargement...</div>
     </div>
   )
+
+  if (previewMode === 'community') {
+    return <CommunityPreview section={searchParams.get('section') || 'all'} />
+  }
 
   // Si l'utilisateur vient d'un lien reset → formulaire nouveau mdp
   if (isReset) return <ResetPassword />
