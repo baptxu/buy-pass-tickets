@@ -34,7 +34,7 @@ export default function AdminDashboard({ session }) {
   async function fetchOrders() {
     const { data: ordersData } = await supabase.from('orders').select('*').order('created_at', { ascending: false })
     setOrders(ordersData || [])
-    const { data: profilesData } = await supabase.from('profiles').select('id, full_name, phone, avatar_url')
+    const { data: profilesData } = await supabase.from('profiles').select('id, full_name, phone')
     const map = {}
     profilesData?.forEach(p => { map[p.id] = p })
     setProfiles(map)
