@@ -309,7 +309,7 @@ export default function ClientDashboard({ session }) {
 
                 <div className="flex gap-3 justify-end">
                   <button onClick={() => { setSelectedEvent(null); setIsCustom(false) }} className="border border-[#2A2D3E] text-gray-400 px-4 py-2 rounded-lg text-sm">← Retour</button>
-                  <button onClick={submitOrder} disabled={!form.event_name || !form.category || !form.event_date} className="bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white px-6 py-2 rounded-lg text-sm font-medium disabled:opacity-50">Envoyer ma demande</button>
+                  <button onClick={submitOrder} disabled={!form.event_name || !form.category} className="bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white px-6 py-2 rounded-lg text-sm font-medium disabled:opacity-50">Envoyer ma demande</button>
                 </div>
               </div>
             )}
