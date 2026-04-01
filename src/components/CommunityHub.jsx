@@ -40,7 +40,12 @@ function parseFeatureError(rawMessage, feature) {
     message.includes('schema cache') ||
     message.includes('Could not find the table') ||
     message.includes('does not exist') ||
-    message.includes('infinite recursion detected in policy')
+    message.includes('infinite recursion detected in policy') ||
+    (
+      feature === 'chat' &&
+      message.includes('row-level security policy') &&
+      message.includes('chat_group_members')
+    )
 
   if (isPendingSetup) {
     return {
@@ -108,6 +113,23 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
     setReviews(data || [])
   }
 
+  async function ensureMembership(groupId, role = 'member') {
+    const membership = await supabase
+      .from('chat_group_members')
+      .insert({
+        group_id: groupId,
+        user_id: session.user.id,
+        role,
+      })
+
+    if (membership.error && membership.error.code !== '23505') {
+      setChatError(membership.error.message)
+      return false
+    }
+
+    return true
+  }
+
   async function ensureGlobalChatRoom() {
     let group = null
     const existing = await supabase
@@ -155,19 +177,8 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
 
     if (!group?.id) return
 
-    const memberResult = await supabase
-      .from('chat_group_members')
-      .upsert(
-        {
-          group_id: group.id,
-          user_id: session.user.id,
-          role: 'member',
-        },
-        { onConflict: 'group_id,user_id' }
-      )
-
-    if (memberResult.error) {
-      setChatError(memberResult.error.message)
+    const joined = await ensureMembership(group.id)
+    if (!joined) {
       return
     }
 
@@ -243,7 +254,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
     setGroupInvites(data || [])
   }
 
-  const fetchMessages = useEffectEvent(async (groupId) => {
+  async function fetchMessages(groupId) {
     const { data, error } = await supabase
       .from('chat_messages')
       .select('*')
@@ -256,7 +267,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
     }
 
     setMessages(data || [])
-  })
+  }
 
   const syncFocusedGroup = useEffectEvent((groupId) => {
     setActiveGroupId(groupId)
@@ -365,16 +376,23 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
 
     setChatSending(true)
     setChatError('')
+    setChatSuccess('')
+
+    const joined = await ensureMembership(activeGroupId)
+    if (!joined) {
+      setChatSending(false)
+      return
+    }
+
+    const content = chatInput.trim()
 
     const result = await supabase
       .from('chat_messages')
       .insert({
         group_id: activeGroupId,
         sender_id: session.user.id,
-        content: chatInput.trim(),
+        content,
       })
-      .select('*')
-      .maybeSingle()
 
     if (result.error) {
       setChatError(result.error.message)
@@ -382,8 +400,8 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
       return
     }
 
-    setMessages(current => current.some(message => message.id === result.data.id) ? current : [...current, result.data])
     setChatInput('')
+    await fetchMessages(activeGroupId)
     setChatSending(false)
   }
 
@@ -402,6 +420,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
   })
 
   const activeGroup = groups.find(group => group.id === activeGroupId)
+  const currentUserProfile = profilesMap[session.user.id]
   const activeMembers = groupMembers.map(member => ({
     ...member,
     profile: profilesMap[member.user_id],
@@ -503,7 +522,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(340px,0.9fr)_minmax(0,1.1fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.86fr)_minmax(0,1.14fr)]">
         <div className="space-y-6">
           <section className="overflow-hidden rounded-[28px] border border-[#2A2D3E] bg-[radial-gradient(circle_at_top_left,_rgba(79,142,247,0.18),_transparent_36%),linear-gradient(135deg,#171B28,#10131D)]">
             <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
@@ -514,27 +533,31 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                   La photo de profil se modifie depuis le profil personnel, puis elle s'affiche ici automatiquement dans les avis et les chats.
                 </p>
               </div>
-              <div className="rounded-full border border-[#2A2D3E] bg-[#0F1117]/50 px-4 py-2 text-sm text-gray-300">
-                Photo geree dans le profil
+              <div className="flex items-center gap-3 rounded-[22px] border border-[#2A2D3E] bg-[#0D1018]/70 px-4 py-3">
+                <AvatarBadge profile={currentUserProfile} size="md" className="ring-[#394059]" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-white">{currentUserProfile?.full_name || 'Votre profil'}</p>
+                  <p className="text-xs text-gray-400">Photo synchronisee depuis le profil</p>
+                </div>
               </div>
             </div>
           </section>
 
           <section className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-[24px] border border-[#2A2D3E] bg-[#161A25] p-5">
+            <div className="flex min-h-[132px] flex-col justify-between rounded-[24px] border border-[#2A2D3E] bg-[#161A25] p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Note moyenne</p>
-              <div className="mt-3 flex items-end gap-3">
-                <p className="text-4xl font-bold text-white">{averageRating}</p>
+              <div className="mt-4 flex flex-col items-start gap-2">
+                <p className="text-4xl font-bold leading-none text-white">{averageRating}</p>
                 <StarRating value={Math.round(Number(averageRating))} readOnly size="sm" />
               </div>
             </div>
-            <div className="rounded-[24px] border border-[#2A2D3E] bg-[#161A25] p-5">
+            <div className="flex min-h-[132px] flex-col justify-between rounded-[24px] border border-[#2A2D3E] bg-[#161A25] p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Avis publies</p>
-              <p className="mt-3 text-4xl font-bold text-white">{reviews.length}</p>
+              <p className="mt-4 text-4xl font-bold leading-none text-white">{reviews.length}</p>
             </div>
-            <div className="rounded-[24px] border border-[#2A2D3E] bg-[#161A25] p-5">
+            <div className="flex min-h-[132px] flex-col justify-between rounded-[24px] border border-[#2A2D3E] bg-[#161A25] p-5">
               <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Salons rejoints</p>
-              <p className="mt-3 text-4xl font-bold text-white">{groups.length}</p>
+              <p className="mt-4 text-4xl font-bold leading-none text-white">{groups.length}</p>
             </div>
           </section>
 
@@ -753,10 +776,14 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                 </div>
               </div>
             ) : (
-              <div className="grid min-h-[620px] xl:grid-cols-[minmax(0,1fr)_340px]">
-                <div className="flex min-h-[620px] flex-col border-b border-[#2A2D3E] xl:border-b-0 xl:border-r">
+              <div className="grid min-h-[620px] lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="flex min-h-[620px] flex-col border-b border-[#2A2D3E] lg:border-b-0 lg:border-r">
                   <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
-                    {messages.length === 0 && <p className="py-8 text-center text-sm text-gray-500">Aucun message pour l'instant.</p>}
+                    {messages.length === 0 && (
+                      <div className="flex min-h-[260px] items-center justify-center rounded-[24px] border border-dashed border-[#2A2D3E] bg-[#10141E] px-6 text-center text-sm text-gray-500">
+                        Aucun message pour l'instant.
+                      </div>
+                    )}
                     {messages.map(message => {
                       const author = profilesMap[message.sender_id]
                       const mine = message.sender_id === session.user.id
@@ -780,19 +807,19 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                   </div>
 
                   <div className="border-t border-[#2A2D3E] p-4">
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-3">
                       <input
                         value={chatInput}
                         onChange={event => setChatInput(event.target.value)}
                         onKeyDown={event => event.key === 'Enter' && !event.shiftKey && (event.preventDefault(), sendMessage())}
                         placeholder="Ecrire un message..."
                         disabled={chatSending}
-                        className="flex-1 rounded-2xl border border-[#2A2D3E] bg-[#0F1117] px-4 py-3 text-sm text-white focus:border-[#4F8EF7] focus:outline-none disabled:opacity-50"
+                        className="flex-1 rounded-2xl border border-[#2A2D3E] bg-[#0F1117] px-4 py-3.5 text-sm text-white focus:border-[#4F8EF7] focus:outline-none disabled:opacity-50"
                       />
                       <button
                         onClick={sendMessage}
                         disabled={!chatInput.trim() || chatSending}
-                        className="rounded-2xl bg-[#4F8EF7] px-4 py-3 text-sm font-medium text-white transition-all hover:bg-[#3a7ae0] disabled:opacity-50"
+                        className="min-w-[118px] rounded-2xl bg-[#4F8EF7] px-4 py-3.5 text-sm font-medium text-white transition-all hover:bg-[#3a7ae0] disabled:opacity-50"
                       >
                         {chatSending ? 'Envoi...' : 'Envoyer'}
                       </button>
@@ -801,12 +828,47 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                 </div>
 
                 <aside className="space-y-4 px-5 py-5">
+                  {eventChatCandidates.length > 0 && (
+                    <div className="rounded-[22px] border border-[#2A2D3E] bg-[#10141E] p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Groupes evenement</p>
+                      <div className="mt-4 space-y-3">
+                        {eventChatCandidates.map(order => {
+                          const eventKey = buildEventKey(order)
+                          const existingGroup = groups.find(group => group.event_key === eventKey)
+
+                          return (
+                            <div key={eventKey} className="rounded-2xl border border-[#2A2D3E] bg-[#0F1117] p-3">
+                              <p className="truncate text-sm font-medium text-white">{order.event_name}</p>
+                              <p className="mt-1 text-xs text-gray-500">{order.city} · {order.event_date}</p>
+                              {existingGroup ? (
+                                <button
+                                  onClick={() => setActiveGroupId(existingGroup.id)}
+                                  className="mt-3 rounded-full border border-[#4F8EF7]/40 bg-[#4F8EF7]/10 px-3 py-1.5 text-xs font-medium text-[#9EC0FF]"
+                                >
+                                  Ouvrir le groupe
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => createEventGroup(order)}
+                                  disabled={groupBusyKey === eventKey || chatUnavailable}
+                                  className="mt-3 rounded-full border border-[#1D9E75]/30 bg-[#1D9E75]/10 px-3 py-1.5 text-xs font-medium text-[#72D3B3] disabled:opacity-50"
+                                >
+                                  {chatUnavailable ? 'Bientot disponible' : groupBusyKey === eventKey ? 'Creation...' : 'Creer le groupe'}
+                                </button>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="rounded-[22px] border border-[#2A2D3E] bg-[#10141E] p-4">
                     <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Membres</p>
                     <div className="mt-4 space-y-3">
                       {activeMembers.length === 0 && <p className="text-sm text-gray-500">Aucun membre charge.</p>}
                       {activeMembers.map(member => (
-                        <div key={member.id} className="flex items-center gap-3">
+                        <div key={member.id} className="flex items-center gap-3 rounded-2xl border border-[#2A2D3E] bg-[#0F1117] px-3 py-2.5">
                           <AvatarBadge profile={member.profile} size="sm" />
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium text-white">{member.profile?.full_name || 'Utilisateur'}</p>
