@@ -2,6 +2,11 @@ import { useEffect, useEffectEvent, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import AvatarBadge from './AvatarBadge'
 
+const PROFILE_SETUP_COPY = {
+  profile: "La mise a jour du profil sera disponible ici dès que les autorisations Supabase du module profil seront activées.",
+  avatar: "L'envoi de photo de profil sera disponible ici dès que le stockage avatars et les autorisations Supabase seront activés.",
+}
+
 function StatCard({ label, value, accent }) {
   return (
     <div className="rounded-[24px] border border-[#2A2D3E] bg-[#161A25] p-5">
@@ -9,6 +14,29 @@ function StatCard({ label, value, accent }) {
       <p className={`mt-3 text-4xl font-bold ${accent}`}>{value}</p>
     </div>
   )
+}
+
+function parseProfileError(rawMessage, feature = 'profile') {
+  if (!rawMessage) return { text: '', pendingSetup: false }
+
+  const message = String(rawMessage)
+  const pendingSetup =
+    message.includes('row-level security') ||
+    message.includes('violates row-level security policy') ||
+    message.includes('permission denied') ||
+    message.includes('must be owner of table')
+
+  if (pendingSetup) {
+    return {
+      text: PROFILE_SETUP_COPY[feature],
+      pendingSetup: true,
+    }
+  }
+
+  return {
+    text: message,
+    pendingSetup: false,
+  }
 }
 
 export default function ClientProfile({
@@ -28,6 +56,7 @@ export default function ClientProfile({
   const [avatarLoading, setAvatarLoading] = useState(false)
   const [passwordLoading, setPasswordLoading] = useState(false)
   const [error, setError] = useState('')
+  const [errorFeature, setErrorFeature] = useState('profile')
   const [success, setSuccess] = useState('')
 
   const loadProfile = useEffectEvent(async () => {
@@ -35,6 +64,7 @@ export default function ClientProfile({
 
     setLoading(true)
     setError('')
+    setErrorFeature('profile')
 
     const { data, error: profileError } = await supabase
       .from('profiles')
@@ -77,6 +107,7 @@ export default function ClientProfile({
 
     setSaving(true)
     setError('')
+    setErrorFeature('profile')
     setSuccess('')
 
     const payload = {
@@ -85,11 +116,27 @@ export default function ClientProfile({
       phone: form.phone.trim(),
     }
 
-    const { error: saveError } = await supabase
+    const updateAttempt = await supabase
       .from('profiles')
-      .upsert(payload, { onConflict: 'id' })
+      .update({
+        full_name: payload.full_name,
+        phone: payload.phone,
+      })
+      .eq('id', session.user.id)
+      .select('id')
+
+    let saveError = updateAttempt.error
+
+    if (!saveError && (updateAttempt.data?.length || 0) === 0) {
+      const insertAttempt = await supabase
+        .from('profiles')
+        .insert(payload)
+
+      saveError = insertAttempt.error
+    }
 
     if (saveError) {
+      setErrorFeature('profile')
       setError(saveError.message)
       setSaving(false)
       return
@@ -114,6 +161,7 @@ export default function ClientProfile({
 
     setAvatarLoading(true)
     setError('')
+    setErrorFeature('avatar')
     setSuccess('')
 
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-')
@@ -127,6 +175,7 @@ export default function ClientProfile({
       })
 
     if (upload.error) {
+      setErrorFeature('avatar')
       setError(upload.error.message)
       setAvatarLoading(false)
       return
@@ -135,19 +184,33 @@ export default function ClientProfile({
     const { data } = supabase.storage.from('avatars').getPublicUrl(path)
     const avatarUrl = data?.publicUrl || ''
 
-    const { error: updateError } = await supabase
+    const updateAttempt = await supabase
       .from('profiles')
-      .upsert(
-        {
+      .update({
+        full_name: form.full_name.trim(),
+        phone: form.phone.trim(),
+        avatar_url: avatarUrl,
+      })
+      .eq('id', session.user.id)
+      .select('id')
+
+    let updateError = updateAttempt.error
+
+    if (!updateError && (updateAttempt.data?.length || 0) === 0) {
+      const insertAttempt = await supabase
+        .from('profiles')
+        .insert({
           id: session.user.id,
           full_name: form.full_name.trim(),
           phone: form.phone.trim(),
           avatar_url: avatarUrl,
-        },
-        { onConflict: 'id' }
-      )
+        })
+
+      updateError = insertAttempt.error
+    }
 
     if (updateError) {
+      setErrorFeature('avatar')
       setError(updateError.message)
       setAvatarLoading(false)
       return
@@ -166,6 +229,7 @@ export default function ClientProfile({
 
     setPasswordLoading(true)
     setError('')
+    setErrorFeature('profile')
     setSuccess('')
 
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(session.user.email, {
@@ -173,6 +237,7 @@ export default function ClientProfile({
     })
 
     if (resetError) {
+      setErrorFeature('profile')
       setError(resetError.message)
       setPasswordLoading(false)
       return
@@ -185,6 +250,7 @@ export default function ClientProfile({
   const currentProfile = profile || previewProfile || {}
   const activeOrders = orders.filter(order => !order.archived)
   const sentOrders = orders.filter(order => order.status === 'sent')
+  const profileFeedback = parseProfileError(error, errorFeature)
 
   if (loading) {
     return (
@@ -265,7 +331,11 @@ export default function ClientProfile({
             </div>
           </div>
 
-          {error && <p className="mt-4 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">{error}</p>}
+          {profileFeedback.text && (
+            <p className={`mt-4 rounded-xl px-4 py-3 text-sm ${profileFeedback.pendingSetup ? 'border border-amber-400/20 bg-amber-400/10 text-amber-100' : 'border border-red-400/20 bg-red-400/10 text-red-200'}`}>
+              {profileFeedback.text}
+            </p>
+          )}
           {success && <p className="mt-4 rounded-xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">{success}</p>}
 
           <div className="mt-5 flex flex-wrap gap-3">
