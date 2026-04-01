@@ -41,7 +41,7 @@ export default function AdminDashboard({ session }) {
   async function fetchAll() {
     const { data: ordersData } = await supabase.from('orders').select('*').order('created_at', { ascending: false })
     setOrders(ordersData || [])
-    const { data: profilesData } = await supabase.from('profiles').select('*').eq('role', 'client')
+    const { data: profilesData } = await supabase.from('profiles').select('id, full_name, phone, role').eq('role', 'client')
     const map = {}
     profilesData?.forEach(p => { map[p.id] = p })
     setProfiles(map)
