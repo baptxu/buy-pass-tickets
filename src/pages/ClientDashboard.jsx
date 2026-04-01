@@ -73,7 +73,7 @@ export default function ClientDashboard({ session }) {
       event_type: event.event_type,
       event_date: '',
       city: '',
-      category: event.categories?.[0]?.name || '',
+      category: '',
       budget: event.categories?.[0]?.price ? event.categories[0].price + '€' : '',
     }))
   }
