@@ -505,36 +505,40 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
 
       <div className="grid gap-6 xl:grid-cols-[minmax(340px,0.9fr)_minmax(0,1.1fr)]">
         <div className="space-y-6">
-          <section className="overflow-hidden rounded-[28px] border border-[#2A2D3E] bg-[radial-gradient(circle_at_top_left,_rgba(79,142,247,0.18),_transparent_36%),linear-gradient(135deg,#171B28,#10131D)]">
-            <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.24em] text-[#7D89A8]">Aspect communautaire</p>
-                <h3 className="mt-2 text-xl font-semibold text-white">Avis publics et discussions entre utilisateurs</h3>
-                <p className="mt-1 text-sm text-gray-400">
-                  La photo de profil se modifie depuis le profil personnel, puis elle s'affiche ici automatiquement dans les avis et les chats.
+          <section className="overflow-hidden rounded-[24px] border border-[#2A2D3E] bg-[#161A25]">
+            <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:gap-5">
+              <div className="flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#7D89A8]">Aspect communautaire</p>
+                <h3 className="mt-1.5 text-base font-semibold text-white">Avis publics et discussions entre utilisateurs</h3>
+                <p className="mt-1 text-xs text-gray-500">
+                  La photo de profil se modifie depuis le profil personnel, puis s'affiche automatiquement ici.
                 </p>
               </div>
-              <div className="rounded-full border border-[#2A2D3E] bg-[#0F1117]/50 px-4 py-2 text-sm text-gray-300">
-                Photo geree dans le profil
+              <div className="flex shrink-0 items-center gap-3 rounded-2xl border border-[#2A2D3E] bg-[#0F1117] px-4 py-2.5">
+                <AvatarBadge profile={profilesMap[session.user.id]} size="sm" />
+                <div>
+                  <p className="text-sm font-medium text-white">{profilesMap[session.user.id]?.full_name || 'Mon profil'}</p>
+                  <p className="text-[11px] text-gray-500">Photo sync depuis le profil</p>
+                </div>
               </div>
             </div>
           </section>
 
-          <section className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-[24px] border border-[#2A2D3E] bg-[#161A25] p-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Note moyenne</p>
-              <div className="mt-3 flex items-end gap-3">
-                <p className="text-4xl font-bold text-white">{averageRating}</p>
+          <section className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-[20px] border border-[#2A2D3E] bg-[#161A25] p-4 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-500">Note moyenne</p>
+              <p className="mt-2 text-3xl font-bold text-white">{averageRating}</p>
+              <div className="mt-1.5 flex justify-center">
                 <StarRating value={Math.round(Number(averageRating))} readOnly size="sm" />
               </div>
             </div>
-            <div className="rounded-[24px] border border-[#2A2D3E] bg-[#161A25] p-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Avis publies</p>
-              <p className="mt-3 text-4xl font-bold text-white">{reviews.length}</p>
+            <div className="rounded-[20px] border border-[#2A2D3E] bg-[#161A25] p-4 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-500">Avis publiés</p>
+              <p className="mt-2 text-3xl font-bold text-white">{reviews.length}</p>
             </div>
-            <div className="rounded-[24px] border border-[#2A2D3E] bg-[#161A25] p-5">
-              <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Salons rejoints</p>
-              <p className="mt-3 text-4xl font-bold text-white">{groups.length}</p>
+            <div className="rounded-[20px] border border-[#2A2D3E] bg-[#161A25] p-4 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-500">Salons rejoints</p>
+              <p className="mt-2 text-3xl font-bold text-white">{groups.length}</p>
             </div>
           </section>
 
@@ -780,6 +784,11 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                   </div>
 
                   <div className="border-t border-[#2A2D3E] p-4">
+                    {chatError && !chatFeedback.pendingSetup && (
+                      <p className="mb-3 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-300">
+                        {chatError}
+                      </p>
+                    )}
                     <div className="flex gap-2">
                       <input
                         value={chatInput}
@@ -800,18 +809,18 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                   </div>
                 </div>
 
-                <aside className="space-y-4 px-5 py-5">
-                  <div className="rounded-[22px] border border-[#2A2D3E] bg-[#10141E] p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Membres</p>
-                    <div className="mt-4 space-y-3">
-                      {activeMembers.length === 0 && <p className="text-sm text-gray-500">Aucun membre charge.</p>}
+                <aside className="space-y-5 px-5 py-5">
+                  <div>
+                    <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-500">
+                      Membres · {activeMembers.length}
+                    </p>
+                    <div className="space-y-2">
+                      {activeMembers.length === 0 && <p className="text-xs text-gray-600">Aucun membre chargé.</p>}
                       {activeMembers.map(member => (
-                        <div key={member.id} className="flex items-center gap-3">
+                        <div key={member.id} className="flex items-center gap-2.5">
                           <AvatarBadge profile={member.profile} size="sm" />
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-white">{member.profile?.full_name || 'Utilisateur'}</p>
-                            <p className="text-xs text-gray-500">{member.role === 'owner' ? 'Organisateur' : 'Membre'}</p>
-                          </div>
+                          <p className="min-w-0 flex-1 truncate text-sm text-white">{member.profile?.full_name || 'Utilisateur'}</p>
+                          <span className="text-[10px] text-gray-600">{member.role === 'owner' ? 'Orga' : 'Membre'}</span>
                         </div>
                       ))}
                     </div>
