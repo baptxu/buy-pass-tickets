@@ -15,8 +15,9 @@ const STATUS_KEYS = ['received', 'searching', 'proposed', 'payment', 'confirmed'
 export default function AdminDashboard({ session }) {
   const [orders, setOrders] = useState([])
   const [profiles, setProfiles] = useState({})
-  const [view, setView] = useState('table')
+  const [view, setView] = useState('table') // table | kanban | detail | analytics | clients | clientdetail
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [selectedClient, setSelectedClient] = useState(null)
   const [messages, setMessages] = useState([])
   const [newMsg, setNewMsg] = useState('')
   const [activeTab, setActiveTab] = useState('detail')
@@ -25,13 +26,15 @@ export default function AdminDashboard({ session }) {
   const [editPrice, setEditPrice] = useState('')
   const [editStatus, setEditStatus] = useState('')
   const [editTicket, setEditTicket] = useState('')
+  const [editCost, setEditCost] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => { fetchOrders() }, [])
 
   async function fetchOrders() {
     const { data: ordersData } = await supabase.from('orders').select('*').order('created_at', { ascending: false })
     setOrders(ordersData || [])
-    const { data: profilesData } = await supabase.from('profiles').select('id, full_name, phone')
+    const { data: profilesData } = await supabase.from('profiles').select('id, full_name, phone, avatar_url')
     const map = {}
     profilesData?.forEach(p => { map[p.id] = p })
     setProfiles(map)
@@ -42,6 +45,7 @@ export default function AdminDashboard({ session }) {
     setEditPrice(order.price || '')
     setEditStatus(order.status)
     setEditTicket(order.ticket_url || '')
+    setEditCost(order.cost || '')
     setActiveTab('detail')
     const { data } = await supabase.from('messages').select('*').eq('order_id', order.id).order('created_at')
     setMessages(data || [])
@@ -49,9 +53,20 @@ export default function AdminDashboard({ session }) {
   }
 
   async function saveOrder() {
-    await supabase.from('orders').update({ status: editStatus, price: editPrice, ticket_url: editTicket }).eq('id', selectedOrder.id)
+    await supabase.from('orders').update({ status: editStatus, price: editPrice, ticket_url: editTicket, cost: editCost }).eq('id', selectedOrder.id)
     fetchOrders()
     setView('table')
+  }
+
+  async function archiveOrder(orderId) {
+    await supabase.from('orders').update({ archived: true }).eq('id', orderId)
+    fetchOrders()
+    setView('table')
+  }
+
+  async function unarchiveOrder(orderId) {
+    await supabase.from('orders').update({ archived: false }).eq('id', orderId)
+    fetchOrders()
   }
 
   async function sendMessage() {
@@ -64,33 +79,54 @@ export default function AdminDashboard({ session }) {
 
   async function logout() { await supabase.auth.signOut() }
 
-  const filtered = orders.filter(o => {
+  // Commandes actives (non archivées)
+  const activeOrders = orders.filter(o => !o.archived)
+  const archivedOrders = orders.filter(o => o.archived)
+
+  const filtered = activeOrders.filter(o => {
     if (filterType !== 'all' && o.event_type !== filterType) return false
     if (filterStatus !== 'all' && o.status !== filterStatus) return false
     return true
   })
 
-  const stats = {
-    active: orders.filter(o => o.status !== 'sent').length,
-    waiting: orders.filter(o => o.status === 'received').length,
-    payment: orders.filter(o => o.status === 'payment').length,
-    sent: orders.filter(o => o.status === 'sent').length,
-  }
+  // Analytics
+  const sentOrders = activeOrders.filter(o => o.status === 'sent')
+  const totalCA = sentOrders.reduce((sum, o) => {
+    const val = parseFloat((o.price || '0').replace(/[^0-9.]/g, ''))
+    return sum + (isNaN(val) ? 0 : val)
+  }, 0)
+  const totalCost = activeOrders.reduce((sum, o) => {
+    const val = parseFloat((o.cost || '0').replace(/[^0-9.]/g, ''))
+    return sum + (isNaN(val) ? 0 : val)
+  }, 0)
+  const totalTickets = sentOrders.reduce((sum, o) => sum + (parseInt(o.seats) || 0), 0)
+  const totalProfit = totalCA - totalCost
+
+  const statusStats = STATUS_KEYS.map(k => ({ key: k, label: STATUS_MAP[k].label, count: activeOrders.filter(o => o.status === k).length }))
+
+  // Clients uniques
+  const uniqueClients = Object.values(profiles)
+  const clientOrders = (clientId) => activeOrders.filter(o => o.client_id === clientId)
 
   return (
     <div className="min-h-screen bg-[#0F1117] flex">
+      {/* Sidebar */}
       <div className="w-56 bg-[#13151F] border-r border-[#2A2D3E] flex flex-col">
         <div className="px-5 py-5 border-b border-[#2A2D3E]">
           <img src="/buypasslogo.png" alt="Buy Pass" className="h-8" />
           <p className="text-xs text-gray-500 mt-2">Admin</p>
         </div>
         <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
-          <button onClick={() => setView('table')} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${view === 'table' || view === 'detail' ? 'bg-[#4F8EF7]/10 text-[#4F8EF7]' : 'text-gray-400 hover:text-white hover:bg-[#1A1D27]'}`}>
-            📋 Commandes
-          </button>
-          <button onClick={() => setView('kanban')} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${view === 'kanban' ? 'bg-[#4F8EF7]/10 text-[#4F8EF7]' : 'text-gray-400 hover:text-white hover:bg-[#1A1D27]'}`}>
-            🗂️ Kanban
-          </button>
+          {[
+            { icon: '📋', label: 'Commandes', key: 'table' },
+            { icon: '🗂️', label: 'Kanban', key: 'kanban' },
+            { icon: '📊', label: 'Analytics', key: 'analytics' },
+            { icon: '👥', label: 'Clients', key: 'clients' },
+          ].map(item => (
+            <button key={item.key} onClick={() => setView(item.key)} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${view === item.key || (item.key === 'table' && view === 'detail') ? 'bg-[#4F8EF7]/10 text-[#4F8EF7]' : 'text-gray-400 hover:text-white hover:bg-[#1A1D27]'}`}>
+              {item.icon} {item.label}
+            </button>
+          ))}
         </nav>
         <div className="px-3 py-4 border-t border-[#2A2D3E]">
           <button onClick={logout} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-[#1A1D27] w-full">
@@ -99,21 +135,30 @@ export default function AdminDashboard({ session }) {
         </div>
       </div>
 
+      {/* Contenu */}
       <div className="flex-1 overflow-auto">
         <div className="px-8 py-6">
 
+          {/* TABLE */}
           {view === 'table' && (
             <>
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-white">Tableau de bord</h2>
-                <p className="text-gray-400 text-sm mt-1">Gestion de toutes vos commandes</p>
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-white">Commandes</h2>
+                  <p className="text-gray-400 text-sm mt-1">{activeOrders.length} commande{activeOrders.length > 1 ? 's' : ''} active{activeOrders.length > 1 ? 's' : ''}</p>
+                </div>
+                <button onClick={() => setShowArchived(s => !s)} className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${showArchived ? 'border-orange-400/30 text-orange-400 bg-orange-400/10' : 'border-[#2A2D3E] text-gray-400 hover:text-white'}`}>
+                  {showArchived ? '📦 Masquer archives' : `📦 Archives (${archivedOrders.length})`}
+                </button>
               </div>
+
+              {/* Stats rapides */}
               <div className="grid grid-cols-4 gap-4 mb-6">
                 {[
-                  { label: 'Commandes actives', value: stats.active, color: 'text-[#4F8EF7]' },
-                  { label: 'Nouvelles demandes', value: stats.waiting, color: 'text-purple-400' },
-                  { label: 'Paiements attendus', value: stats.payment, color: 'text-orange-400' },
-                  { label: 'Billets envoyés', value: stats.sent, color: 'text-[#1D9E75]' },
+                  { label: 'Actives', value: activeOrders.filter(o => o.status !== 'sent').length, color: 'text-[#4F8EF7]' },
+                  { label: 'Nouvelles', value: activeOrders.filter(o => o.status === 'received').length, color: 'text-purple-400' },
+                  { label: 'Paiements', value: activeOrders.filter(o => o.status === 'payment').length, color: 'text-orange-400' },
+                  { label: 'Envoyées', value: activeOrders.filter(o => o.status === 'sent').length, color: 'text-green-400' },
                 ].map(s => (
                   <div key={s.label} className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-4">
                     <p className="text-xs text-gray-500 mb-2">{s.label}</p>
@@ -121,6 +166,8 @@ export default function AdminDashboard({ session }) {
                   </div>
                 ))}
               </div>
+
+              {/* Filtres */}
               <div className="flex gap-3 mb-4 flex-wrap">
                 {['all', 'Concert', 'Football', 'Festival'].map(f => (
                   <button key={f} onClick={() => setFilterType(f)} className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${filterType === f ? 'bg-[#4F8EF7]/20 text-[#4F8EF7] border border-[#4F8EF7]/30' : 'border border-[#2A2D3E] text-gray-400 hover:text-white'}`}>
@@ -132,7 +179,9 @@ export default function AdminDashboard({ session }) {
                   {STATUS_KEYS.map(k => <option key={k} value={k}>{STATUS_MAP[k].label}</option>)}
                 </select>
               </div>
-              <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl overflow-hidden">
+
+              {/* Tableau commandes actives */}
+              <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl overflow-hidden mb-6">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-[#2A2D3E]">
@@ -160,8 +209,9 @@ export default function AdminDashboard({ session }) {
                           <td className="px-4 py-3">
                             <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${s.color}`}>{s.label}</span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3 flex gap-2">
                             <button onClick={() => openOrder(order)} className="text-xs border border-[#2A2D3E] hover:border-[#4F8EF7] text-gray-300 hover:text-[#4F8EF7] px-3 py-1.5 rounded-lg transition-all">Gérer</button>
+                            <button onClick={() => archiveOrder(order.id)} className="text-xs border border-[#2A2D3E] hover:border-orange-400 text-gray-300 hover:text-orange-400 px-3 py-1.5 rounded-lg transition-all">Archiver</button>
                           </td>
                         </tr>
                       )
@@ -170,9 +220,37 @@ export default function AdminDashboard({ session }) {
                 </table>
                 {filtered.length === 0 && <p className="text-center text-gray-500 py-12">Aucune commande</p>}
               </div>
+
+              {/* Commandes archivées */}
+              {showArchived && (
+                <div className="bg-[#1A1D27] border border-orange-400/20 rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-[#2A2D3E]">
+                    <h3 className="text-sm font-medium text-orange-400">📦 Commandes archivées</h3>
+                  </div>
+                  <table className="w-full">
+                    <tbody>
+                      {archivedOrders.map(order => {
+                        const profile = profiles[order.client_id]
+                        return (
+                          <tr key={order.id} className="border-b border-[#2A2D3E] opacity-60">
+                            <td className="px-4 py-3 text-sm text-white">{profile?.full_name || 'Client'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-400">{order.event_name}</td>
+                            <td className="px-4 py-3 text-sm text-gray-400">{order.event_date}</td>
+                            <td className="px-4 py-3">
+                              <button onClick={() => unarchiveOrder(order.id)} className="text-xs border border-[#2A2D3E] hover:border-green-400 text-gray-400 hover:text-green-400 px-3 py-1.5 rounded-lg transition-all">Restaurer</button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                      {archivedOrders.length === 0 && <tr><td colSpan={4} className="text-center text-gray-500 py-8">Aucune commande archivée</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </>
           )}
 
+          {/* KANBAN */}
           {view === 'kanban' && (
             <>
               <div className="mb-6">
@@ -182,7 +260,7 @@ export default function AdminDashboard({ session }) {
               <div className="grid grid-cols-3 gap-4">
                 {STATUS_KEYS.map(key => {
                   const s = STATUS_MAP[key]
-                  const col = orders.filter(o => o.status === key)
+                  const col = activeOrders.filter(o => o.status === key)
                   return (
                     <div key={key} className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-4">
                       <div className="flex items-center justify-between mb-3">
@@ -206,6 +284,160 @@ export default function AdminDashboard({ session }) {
             </>
           )}
 
+          {/* ANALYTICS */}
+          {view === 'analytics' && (
+            <>
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-white">Analytics</h2>
+                <p className="text-gray-400 text-sm mt-1">Vue d'ensemble de votre activité</p>
+              </div>
+
+              {/* KPIs */}
+              <div className="grid grid-cols-4 gap-4 mb-8">
+                {[
+                  { label: 'CA Total', value: totalCA.toFixed(0) + '€', sub: 'Commandes envoyées', color: 'text-green-400' },
+                  { label: 'Coût Total', value: totalCost.toFixed(0) + '€', sub: 'Montant dépensé', color: 'text-red-400' },
+                  { label: 'Bénéfice', value: totalProfit.toFixed(0) + '€', sub: 'CA - Coûts', color: totalProfit >= 0 ? 'text-[#4F8EF7]' : 'text-red-400' },
+                  { label: 'Billets vendus', value: totalTickets, sub: 'Places envoyées', color: 'text-purple-400' },
+                ].map(s => (
+                  <div key={s.label} className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-5">
+                    <p className="text-xs text-gray-500 mb-1">{s.label}</p>
+                    <p className={`text-3xl font-bold ${s.color}`}>{s.value}</p>
+                    <p className="text-xs text-gray-600 mt-1">{s.sub}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Commandes par statut */}
+              <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-6 mb-6">
+                <h3 className="text-white font-semibold mb-4">Commandes par statut</h3>
+                <div className="flex flex-col gap-3">
+                  {statusStats.map(s => (
+                    <div key={s.key} className="flex items-center gap-3">
+                      <span className="text-xs text-gray-400 w-40">{s.label}</span>
+                      <div className="flex-1 bg-[#0F1117] rounded-full h-2">
+                        <div className="bg-[#4F8EF7] h-2 rounded-full transition-all" style={{ width: activeOrders.length > 0 ? `${(s.count / activeOrders.length) * 100}%` : '0%' }} />
+                      </div>
+                      <span className="text-xs text-white font-medium w-6 text-right">{s.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Dernières commandes avec prix */}
+              <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-6">
+                <h3 className="text-white font-semibold mb-4">Commandes avec prix</h3>
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[#2A2D3E]">
+                      {['Événement', 'Client', 'Prix vente', 'Coût', 'Marge'].map(h => (
+                        <th key={h} className="pb-3 text-left text-xs text-gray-500 uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeOrders.filter(o => o.price).map(order => {
+                      const price = parseFloat((order.price || '0').replace(/[^0-9.]/g, ''))
+                      const cost = parseFloat((order.cost || '0').replace(/[^0-9.]/g, ''))
+                      const margin = price - cost
+                      return (
+                        <tr key={order.id} className="border-b border-[#2A2D3E]">
+                          <td className="py-3 text-sm text-white">{order.event_name}</td>
+                          <td className="py-3 text-sm text-gray-400">{profiles[order.client_id]?.full_name || 'Client'}</td>
+                          <td className="py-3 text-sm text-green-400">{order.price || '-'}</td>
+                          <td className="py-3 text-sm text-red-400">{order.cost || '-'}</td>
+                          <td className={`py-3 text-sm font-medium ${margin >= 0 ? 'text-[#4F8EF7]' : 'text-red-400'}`}>{order.cost ? margin.toFixed(0) + '€' : '-'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                {activeOrders.filter(o => o.price).length === 0 && <p className="text-center text-gray-500 py-8">Aucune commande avec prix</p>}
+              </div>
+            </>
+          )}
+
+          {/* CLIENTS */}
+          {view === 'clients' && (
+            <>
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-white">Clients</h2>
+                <p className="text-gray-400 text-sm mt-1">{uniqueClients.length} client{uniqueClients.length > 1 ? 's' : ''} enregistré{uniqueClients.length > 1 ? 's' : ''}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                {uniqueClients.map(client => {
+                  const orders = clientOrders(client.id)
+                  const lastOrder = orders[0]
+                  return (
+                    <div key={client.id} onClick={() => { setSelectedClient(client); setView('clientdetail') }} className="bg-[#1A1D27] border border-[#2A2D3E] hover:border-[#4F8EF7] rounded-xl p-5 cursor-pointer transition-all">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          {client.avatar_url ? (
+                            <img src={client.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-[#4F8EF7]/20 flex items-center justify-center text-[#4F8EF7] font-bold">
+                              {client.full_name?.[0]?.toUpperCase() || '?'}
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-white font-medium">{client.full_name || 'Client inconnu'}</p>
+                            <p className="text-gray-500 text-xs">{client.phone || 'Pas de téléphone'}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-white">{orders.length} commande{orders.length > 1 ? 's' : ''}</p>
+                          {lastOrder && <p className="text-xs text-gray-500 mt-0.5">Dernière : {lastOrder.event_name}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+                {uniqueClients.length === 0 && <p className="text-center text-gray-500 py-16">Aucun client</p>}
+              </div>
+            </>
+          )}
+
+          {/* FICHE CLIENT */}
+          {view === 'clientdetail' && selectedClient && (
+            <>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  {selectedClient.avatar_url ? (
+                    <img src={selectedClient.avatar_url} alt="" className="w-12 h-12 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-[#4F8EF7]/20 flex items-center justify-center text-[#4F8EF7] font-bold text-lg">
+                      {selectedClient.full_name?.[0]?.toUpperCase() || '?'}
+                    </div>
+                  )}
+                  <div>
+                    <h2 className="text-xl font-bold text-white">{selectedClient.full_name || 'Client'}</h2>
+                    <p className="text-gray-400 text-sm">{selectedClient.phone || 'Pas de téléphone'}</p>
+                  </div>
+                </div>
+                <button onClick={() => setView('clients')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-2 rounded-lg">← Retour</button>
+              </div>
+              <div className="flex flex-col gap-4">
+                {clientOrders(selectedClient.id).map(order => {
+                  const s = STATUS_MAP[order.status]
+                  return (
+                    <div key={order.id} onClick={() => openOrder(order)} className="bg-[#1A1D27] border border-[#2A2D3E] hover:border-[#4F8EF7] rounded-xl p-5 cursor-pointer transition-all">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-white font-medium">{order.event_name}</p>
+                          <p className="text-gray-500 text-xs mt-1">{order.city} · {order.event_date} · {order.seats} place{order.seats > 1 ? 's' : ''}</p>
+                        </div>
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${s.color}`}>{s.label}</span>
+                      </div>
+                      {order.price && <p className="text-sm text-[#1D9E75] font-medium mt-2">{order.price}</p>}
+                    </div>
+                  )
+                })}
+                {clientOrders(selectedClient.id).length === 0 && <p className="text-center text-gray-500 py-16">Aucune commande</p>}
+              </div>
+            </>
+          )}
+
+          {/* DETAIL COMMANDE */}
           {view === 'detail' && selectedOrder && (
             <>
               <div className="flex items-center justify-between mb-6">
@@ -220,6 +452,7 @@ export default function AdminDashboard({ session }) {
                     </button>
                   ))}
                 </div>
+
                 {activeTab === 'detail' && (
                   <div className="grid grid-cols-2 gap-3">
                     {[
@@ -245,6 +478,7 @@ export default function AdminDashboard({ session }) {
                     )}
                   </div>
                 )}
+
                 {activeTab === 'messages' && (
                   <div>
                     <div className="flex flex-col gap-3 max-h-64 overflow-y-auto mb-4 p-2">
@@ -263,6 +497,7 @@ export default function AdminDashboard({ session }) {
                     </div>
                   </div>
                 )}
+
                 {activeTab === 'actions' && (
                   <div className="flex flex-col gap-4">
                     <div>
@@ -272,16 +507,25 @@ export default function AdminDashboard({ session }) {
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Prix total</label>
+                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Prix de vente</label>
                       <input value={editPrice} onChange={e => setEditPrice(e.target.value)} placeholder="Ex : 280€" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Lien billet (Ticketmaster...)</label>
+                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Coût d'achat (pour analytics)</label>
+                      <input value={editCost} onChange={e => setEditCost(e.target.value)} placeholder="Ex : 200€" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Lien billet</label>
                       <input value={editTicket} onChange={e => setEditTicket(e.target.value)} placeholder="https://ticketmaster.fr/transfer/..." className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
                     </div>
-                    <button onClick={saveOrder} className="bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white py-2.5 rounded-lg text-sm font-medium">
-                      Enregistrer les modifications
-                    </button>
+                    <div className="flex gap-3">
+                      <button onClick={saveOrder} className="flex-1 bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white py-2.5 rounded-lg text-sm font-medium">
+                        Enregistrer
+                      </button>
+                      <button onClick={() => archiveOrder(selectedOrder.id)} className="border border-orange-400/30 text-orange-400 hover:bg-orange-400/10 px-4 py-2.5 rounded-lg text-sm transition-all">
+                        📦 Archiver
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
