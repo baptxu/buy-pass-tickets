@@ -132,7 +132,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
       const created = await supabase
         .from('chat_groups')
         .insert({
-          name: 'Salon general',
+          name: 'Salon général',
           slug: 'global',
           is_global: true,
           created_by: session.user.id,
@@ -484,7 +484,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
   if (loading) {
     return (
       <div className="rounded-[28px] border border-[#2A2D3E] bg-[#131722] p-10 text-center text-gray-400">
-        Chargement de l'espace communaute...
+        Chargement de l'espace communauté...
       </div>
     )
   }
@@ -493,8 +493,8 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-white">Communaute Buy Pass</h2>
-          <p className="mt-1 text-sm text-gray-400">Avis apres echange et salons en direct. La photo de profil se gere depuis le profil personnel.</p>
+          <h2 className="text-2xl font-bold text-white">Communauté Buy Pass</h2>
+          <p className="mt-1 text-sm text-gray-400">Avis après échange et salons en direct. La photo de profil se gère depuis le profil personnel.</p>
         </div>
         <button onClick={onBack} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-2 rounded-lg">
           ← Retour
@@ -518,11 +518,11 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                   La photo de profil se modifie depuis le profil personnel, puis s'affiche automatiquement ici.
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-3 rounded-2xl border border-[#2A2D3E] bg-[#0F1117] px-4 py-2.5">
+              <div className="flex shrink-0 items-center gap-2.5 rounded-2xl border border-[#2A2D3E] bg-[#0F1117] px-3 py-2">
                 <AvatarBadge profile={currentUserProfile} size="sm" />
-                <div>
-                  <p className="text-sm font-medium text-white">{currentUserProfile?.full_name || 'Mon profil'}</p>
-                  <p className="text-[11px] text-gray-500">Photo sync depuis le profil</p>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-white">{currentUserProfile?.full_name || 'Mon profil'}</p>
+                  <p className="whitespace-nowrap text-[11px] text-gray-500">Sync. depuis le profil</p>
                 </div>
               </div>
             </div>
@@ -550,7 +550,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-white">Noter une prestation</h3>
-                <p className="mt-1 text-sm text-gray-400">Les avis se debloquent une fois les billets envoyes.</p>
+                <p className="mt-1 text-sm text-gray-400">Les avis se débloquent une fois les billets envoyés.</p>
               </div>
             </div>
 
@@ -564,7 +564,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
               <div className="rounded-2xl border border-dashed border-[#2A2D3E] px-4 py-8 text-center text-sm text-gray-500">
                 {reviewsUnavailable
                   ? "L'espace avis s'activera automatiquement une fois le module communauté déployé."
-                  : 'Aucun billet envoye a noter pour le moment.'}
+                  : 'Aucun billet envoyé à noter pour le moment.'}
               </div>
             ) : (
               <div className="space-y-4">
@@ -578,7 +578,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                           <p className="text-sm text-gray-400">{order.city} · {order.event_date} · {order.category}</p>
                         </div>
                         <span className="rounded-full border border-[#1D9E75]/30 bg-[#1D9E75]/10 px-3 py-1 text-xs font-medium text-[#72D3B3]">
-                          Billets envoyes
+                          Billets envoyés
                         </span>
                       </div>
 
@@ -617,13 +617,13 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
           <section className="rounded-[28px] border border-[#2A2D3E] bg-[#161A25] p-6">
             <div className="mb-5">
               <h3 className="text-lg font-semibold text-white">Avis des utilisateurs</h3>
-              <p className="mt-1 text-sm text-gray-400">Les retours publies sont visibles par toute la communaute.</p>
+              <p className="mt-1 text-sm text-gray-400">Les retours publiés sont visibles par toute la communauté.</p>
             </div>
 
             {reviews.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[#2A2D3E] px-4 py-8 text-center text-sm text-gray-500">
                 {reviewsUnavailable
-                  ? 'Les premiers avis apparaitront ici une fois la fonctionnalite activée.'
+                  ? 'Les premiers avis apparaîtront ici une fois la fonctionnalité activée.'
                   : 'Aucun avis public pour le moment.'}
               </div>
             ) : (
@@ -658,7 +658,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
           <section className="rounded-[28px] border border-[#2A2D3E] bg-[#171B28] p-6">
             <div className="mb-5">
               <h3 className="text-lg font-semibold text-white">Salons en direct</h3>
-              <p className="mt-1 text-sm text-gray-400">Discute avec toute la communaute ou cree un groupe avec les personnes confirmees pour un evenement.</p>
+              <p className="mt-1 text-sm text-gray-400">Discute avec toute la communauté ou crée un groupe avec les personnes confirmées pour un événement.</p>
             </div>
 
             {chatFeedback.text && (
@@ -671,7 +671,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
             <div className="space-y-3">
               {eventChatCandidates.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-[#2A2D3E] px-4 py-6 text-center text-sm text-gray-500">
-                  Les groupes evenement s'activent des qu'une commande passe en confirmee.
+                  Les groupes événement s'activent dès qu'une commande passe en confirmée.
                 </div>
               )}
 
@@ -727,17 +727,17 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                         : 'border border-[#2A2D3E] text-gray-400 hover:text-white'
                     }`}
                   >
-                    {group.is_global ? 'Salon general' : group.name}
+                    {group.is_global ? 'Salon général' : group.name}
                   </button>
                 ))}
               </div>
             </div>
 
             <div className="border-b border-[#2A2D3E] px-5 py-4">
-              <h4 className="text-base font-semibold text-white">{activeGroup?.is_global ? 'Salon general' : activeGroup?.name || 'Aucun salon'}</h4>
+              <h4 className="text-base font-semibold text-white">{activeGroup?.is_global ? 'Salon général' : activeGroup?.name || 'Aucun salon'}</h4>
               <p className="mt-1 text-sm text-gray-400">
                 {activeGroup?.is_global
-                  ? 'Canal communautaire ouvert a tous les utilisateurs.'
+                  ? 'Canal communautaire ouvert à tous les utilisateurs.'
                   : activeGroup?.event_name
                     ? `Groupe reserve aux personnes confirmees pour ${activeGroup.event_name}.`
                     : 'Selectionne un salon pour commencer.'}
@@ -756,7 +756,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                   <p className="mt-3 max-w-lg text-sm leading-7 text-gray-400">
                     {chatUnavailable
                       ? "Les groupes et conversations seront visibles ici dès que l'infrastructure communauté sera activée."
-                      : "Ouvre le salon general ou cree un groupe evenement pour acceder a la discussion, aux membres et aux liens d invitation."}
+                      : "Ouvre le salon général ou crée un groupe événement pour accéder à la discussion, aux membres et aux liens d'invitation."}
                   </p>
                 </div>
               </div>
@@ -792,9 +792,9 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                   </div>
 
                   <div className="border-t border-[#2A2D3E] p-4">
-                    {chatError && !chatFeedback.pendingSetup && (
+                    {chatError && (
                       <p className="mb-3 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs text-red-300">
-                        {chatError}
+                        {chatFeedback.pendingSetup ? 'Le chat est temporairement indisponible (configuration en cours).' : chatError}
                       </p>
                     )}
                     <div className="flex gap-2">
@@ -802,7 +802,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                         value={chatInput}
                         onChange={event => setChatInput(event.target.value)}
                         onKeyDown={event => event.key === 'Enter' && !event.shiftKey && (event.preventDefault(), sendMessage())}
-                        placeholder="Ecrire un message..."
+                        placeholder="Écrire un message..."
                         disabled={chatSending}
                         className="flex-1 rounded-2xl border border-[#2A2D3E] bg-[#0F1117] px-4 py-3 text-sm text-white focus:border-[#4F8EF7] focus:outline-none disabled:opacity-50"
                       />
@@ -873,7 +873,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                     <div className="rounded-[22px] border border-[#2A2D3E] bg-[#10141E] p-4">
                       <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Inviter un membre</p>
                       <p className="mt-2 text-sm text-gray-400">
-                        Renseigne un email pour reserver le lien a une personne precise, ou laisse vide pour un lien partageable.
+                        Renseigne un email pour réserver le lien à une personne précise, ou laisse vide pour un lien partageable.
                       </p>
 
                       <input
@@ -894,12 +894,12 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                         disabled={inviteBusy || inviteFeedback.pendingSetup}
                         className="mt-4 w-full rounded-2xl bg-[#1D9E75] px-4 py-3 text-sm font-medium text-white transition-all hover:bg-[#178760] disabled:opacity-50"
                       >
-                        {inviteFeedback.pendingSetup ? 'Bientot disponible' : inviteBusy ? 'Creation...' : 'Generer un lien'}
+                        {inviteFeedback.pendingSetup ? 'Bientôt disponible' : inviteBusy ? 'Création...' : 'Générer un lien'}
                       </button>
 
                       {lastInviteLink && (
                         <div className="mt-4 rounded-2xl border border-[#2A2D3E] bg-[#0F1117] p-3">
-                          <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Dernier lien cree</p>
+                          <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Dernier lien créé</p>
                           <p className="mt-2 break-all text-sm text-[#9EC0FF]">{lastInviteLink}</p>
                         </div>
                       )}
