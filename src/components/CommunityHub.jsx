@@ -3,6 +3,12 @@ import { supabase } from '../lib/supabase'
 import AvatarBadge from './AvatarBadge'
 import StarRating from './StarRating'
 
+const SETUP_PENDING_COPY = {
+  reviews: "Les avis seront visibles ici dès que l'espace communauté sera activé côté base de données.",
+  chat: "Le chat sera disponible ici dès que les tables communauté seront déployées sur Supabase.",
+  invites: "Les invitations par lien seront prêtes dès que le module groupes sera activé côté base de données.",
+}
+
 function buildEventKey(item) {
   return [item?.event_name, item?.event_date, item?.city]
     .map(value => String(value || '').trim().toLowerCase())
@@ -24,6 +30,28 @@ function formatMessageTime(value) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function parseFeatureError(rawMessage, feature) {
+  if (!rawMessage) return { text: '', pendingSetup: false }
+
+  const message = String(rawMessage)
+  const isPendingSetup =
+    message.includes('schema cache') ||
+    message.includes('Could not find the table') ||
+    message.includes('does not exist')
+
+  if (isPendingSetup) {
+    return {
+      text: SETUP_PENDING_COPY[feature],
+      pendingSetup: true,
+    }
+  }
+
+  return {
+    text: message,
+    pendingSetup: false,
+  }
 }
 
 export default function CommunityHub({ session, orders, onBack, focusGroupId = null, entryNotice = '', onClearEntryNotice }) {
@@ -377,6 +405,11 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
     ...member,
     profile: profilesMap[member.user_id],
   }))
+  const reviewFeedback = parseFeatureError(reviewError, 'reviews')
+  const chatFeedback = parseFeatureError(chatError, 'chat')
+  const inviteFeedback = parseFeatureError(inviteError, 'invites')
+  const chatUnavailable = chatFeedback.pendingSetup
+  const reviewsUnavailable = reviewFeedback.pendingSetup
   const reviewedOrderIds = new Set(reviews.map(review => review.order_id))
   const averageRating = reviews.length
     ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1)
@@ -469,7 +502,7 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(340px,0.9fr)_minmax(0,1.1fr)]">
         <div className="space-y-6">
           <section className="overflow-hidden rounded-[28px] border border-[#2A2D3E] bg-[radial-gradient(circle_at_top_left,_rgba(79,142,247,0.18),_transparent_36%),linear-gradient(135deg,#171B28,#10131D)]">
             <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
@@ -512,11 +545,17 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
               </div>
             </div>
 
-            {reviewError && <p className="mb-4 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">{reviewError}</p>}
+            {reviewFeedback.text && (
+              <p className={`mb-4 rounded-xl px-4 py-3 text-sm ${reviewFeedback.pendingSetup ? 'border border-amber-400/20 bg-amber-400/10 text-amber-100' : 'border border-red-400/20 bg-red-400/10 text-red-200'}`}>
+                {reviewFeedback.text}
+              </p>
+            )}
 
             {reviewableOrders.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[#2A2D3E] px-4 py-8 text-center text-sm text-gray-500">
-                Aucun billet envoye a noter pour le moment.
+                {reviewsUnavailable
+                  ? "L'espace avis s'activera automatiquement une fois le module communauté déployé."
+                  : 'Aucun billet envoye a noter pour le moment.'}
               </div>
             ) : (
               <div className="space-y-4">
@@ -574,7 +613,9 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
 
             {reviews.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[#2A2D3E] px-4 py-8 text-center text-sm text-gray-500">
-                Aucun avis public pour le moment.
+                {reviewsUnavailable
+                  ? 'Les premiers avis apparaitront ici une fois la fonctionnalite activée.'
+                  : 'Aucun avis public pour le moment.'}
               </div>
             ) : (
               <div className="space-y-4">
@@ -611,7 +652,11 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
               <p className="mt-1 text-sm text-gray-400">Discute avec toute la communaute ou cree un groupe avec les personnes confirmees pour un evenement.</p>
             </div>
 
-            {chatError && <p className="mb-4 rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-200">{chatError}</p>}
+            {chatFeedback.text && (
+              <p className={`mb-4 rounded-xl px-4 py-3 text-sm ${chatFeedback.pendingSetup ? 'border border-amber-400/20 bg-amber-400/10 text-amber-100' : 'border border-red-400/20 bg-red-400/10 text-red-200'}`}>
+                {chatFeedback.text}
+              </p>
+            )}
             {chatSuccess && <p className="mb-4 rounded-xl border border-green-400/20 bg-green-400/10 px-4 py-3 text-sm text-green-200">{chatSuccess}</p>}
 
             <div className="space-y-3">
@@ -641,10 +686,10 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
                       ) : (
                         <button
                           onClick={() => createEventGroup(order)}
-                          disabled={groupBusyKey === eventKey}
+                          disabled={groupBusyKey === eventKey || chatUnavailable}
                           className="rounded-full border border-[#1D9E75]/30 bg-[#1D9E75]/10 px-3 py-1.5 text-xs font-medium text-[#72D3B3] disabled:opacity-50"
                         >
-                          {groupBusyKey === eventKey ? 'Creation...' : 'Creer le groupe'}
+                          {chatUnavailable ? 'Bientot disponible' : groupBusyKey === eventKey ? 'Creation...' : 'Creer le groupe'}
                         </button>
                       )}
                     </div>
@@ -690,120 +735,141 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
               </p>
             </div>
 
-            <div className="grid min-h-[620px] xl:grid-cols-[minmax(0,1.15fr)_320px]">
-              <div className="flex min-h-[620px] flex-col border-b border-[#2A2D3E] xl:border-b-0 xl:border-r">
-                <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
-                  {!activeGroupId && <p className="py-8 text-center text-sm text-gray-500">Aucun salon disponible.</p>}
-                  {activeGroupId && messages.length === 0 && <p className="py-8 text-center text-sm text-gray-500">Aucun message pour l'instant.</p>}
-                  {messages.map(message => {
-                    const author = profilesMap[message.sender_id]
-                    const mine = message.sender_id === session.user.id
-                    return (
-                      <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] rounded-[24px] px-4 py-3 ${mine ? 'bg-[#4F8EF7] text-white' : 'bg-[#0F1117] text-gray-200 border border-[#2A2D3E]'}`}>
-                          <div className="mb-2 flex items-center gap-2">
-                            {!mine && <AvatarBadge profile={author} size="sm" className="h-7 w-7 text-xs" />}
-                            <span className={`text-xs font-medium ${mine ? 'text-white/80' : 'text-[#9AA3C0]'}`}>
-                              {mine ? 'Vous' : author?.full_name || 'Utilisateur'}
-                            </span>
-                            <span className={`text-[11px] ${mine ? 'text-white/60' : 'text-gray-500'}`}>
-                              {formatMessageTime(message.created_at)}
-                            </span>
-                          </div>
-                          <p className="text-sm leading-6">{message.content}</p>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div className="border-t border-[#2A2D3E] p-4">
-                  <div className="flex gap-2">
-                    <input
-                      value={chatInput}
-                      onChange={event => setChatInput(event.target.value)}
-                      onKeyDown={event => event.key === 'Enter' && !event.shiftKey && (event.preventDefault(), sendMessage())}
-                      placeholder={activeGroupId ? 'Ecrire un message...' : 'Selectionne d abord un salon'}
-                      disabled={!activeGroupId || chatSending}
-                      className="flex-1 rounded-2xl border border-[#2A2D3E] bg-[#0F1117] px-4 py-3 text-sm text-white focus:border-[#4F8EF7] focus:outline-none disabled:opacity-50"
-                    />
-                    <button
-                      onClick={sendMessage}
-                      disabled={!activeGroupId || !chatInput.trim() || chatSending}
-                      className="rounded-2xl bg-[#4F8EF7] px-4 py-3 text-sm font-medium text-white transition-all hover:bg-[#3a7ae0] disabled:opacity-50"
-                    >
-                      {chatSending ? 'Envoi...' : 'Envoyer'}
-                    </button>
+            {!activeGroupId ? (
+              <div className="px-5 py-10">
+                <div className="flex min-h-[420px] flex-col items-center justify-center rounded-[26px] border border-dashed border-[#2A2D3E] bg-[#10141E] px-6 text-center">
+                  <div className="mb-5 rounded-full border border-[#2A2D3E] bg-[#141928] px-4 py-2 text-xs uppercase tracking-[0.24em] text-[#7D89A8]">
+                    Aucun salon selectionne
                   </div>
+                  <h4 className="text-2xl font-semibold text-white">
+                    {chatUnavailable ? 'Module chat en cours d activation' : 'Choisis un salon pour commencer a discuter'}
+                  </h4>
+                  <p className="mt-3 max-w-lg text-sm leading-7 text-gray-400">
+                    {chatUnavailable
+                      ? "Les groupes et conversations seront visibles ici dès que l'infrastructure communauté sera activée."
+                      : "Ouvre le salon general ou cree un groupe evenement pour acceder a la discussion, aux membres et aux liens d invitation."}
+                  </p>
                 </div>
               </div>
-
-              <aside className="space-y-4 px-5 py-5">
-                <div className="rounded-[22px] border border-[#2A2D3E] bg-[#10141E] p-4">
-                  <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Membres</p>
-                  <div className="mt-4 space-y-3">
-                    {activeMembers.length === 0 && <p className="text-sm text-gray-500">Aucun membre charge.</p>}
-                    {activeMembers.map(member => (
-                      <div key={member.id} className="flex items-center gap-3">
-                        <AvatarBadge profile={member.profile} size="sm" />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-white">{member.profile?.full_name || 'Utilisateur'}</p>
-                          <p className="text-xs text-gray-500">{member.role === 'owner' ? 'Organisateur' : 'Membre'}</p>
+            ) : (
+              <div className="grid min-h-[620px] xl:grid-cols-[minmax(0,1fr)_340px]">
+                <div className="flex min-h-[620px] flex-col border-b border-[#2A2D3E] xl:border-b-0 xl:border-r">
+                  <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+                    {messages.length === 0 && <p className="py-8 text-center text-sm text-gray-500">Aucun message pour l'instant.</p>}
+                    {messages.map(message => {
+                      const author = profilesMap[message.sender_id]
+                      const mine = message.sender_id === session.user.id
+                      return (
+                        <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-[85%] rounded-[24px] px-4 py-3 ${mine ? 'bg-[#4F8EF7] text-white' : 'bg-[#0F1117] text-gray-200 border border-[#2A2D3E]'}`}>
+                            <div className="mb-2 flex items-center gap-2">
+                              {!mine && <AvatarBadge profile={author} size="sm" className="h-7 w-7 text-xs" />}
+                              <span className={`text-xs font-medium ${mine ? 'text-white/80' : 'text-[#9AA3C0]'}`}>
+                                {mine ? 'Vous' : author?.full_name || 'Utilisateur'}
+                              </span>
+                              <span className={`text-[11px] ${mine ? 'text-white/60' : 'text-gray-500'}`}>
+                                {formatMessageTime(message.created_at)}
+                              </span>
+                            </div>
+                            <p className="text-sm leading-6">{message.content}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
+                  </div>
+
+                  <div className="border-t border-[#2A2D3E] p-4">
+                    <div className="flex gap-2">
+                      <input
+                        value={chatInput}
+                        onChange={event => setChatInput(event.target.value)}
+                        onKeyDown={event => event.key === 'Enter' && !event.shiftKey && (event.preventDefault(), sendMessage())}
+                        placeholder="Ecrire un message..."
+                        disabled={chatSending}
+                        className="flex-1 rounded-2xl border border-[#2A2D3E] bg-[#0F1117] px-4 py-3 text-sm text-white focus:border-[#4F8EF7] focus:outline-none disabled:opacity-50"
+                      />
+                      <button
+                        onClick={sendMessage}
+                        disabled={!chatInput.trim() || chatSending}
+                        className="rounded-2xl bg-[#4F8EF7] px-4 py-3 text-sm font-medium text-white transition-all hover:bg-[#3a7ae0] disabled:opacity-50"
+                      >
+                        {chatSending ? 'Envoi...' : 'Envoyer'}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                {!activeGroup?.is_global && activeGroupId && (
+                <aside className="space-y-4 px-5 py-5">
                   <div className="rounded-[22px] border border-[#2A2D3E] bg-[#10141E] p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Inviter un membre</p>
-                    <p className="mt-2 text-sm text-gray-400">
-                      Renseigne un email pour verrouiller l’invitation a une personne precise, ou laisse vide pour un lien partageable.
-                    </p>
-
-                    <input
-                      value={inviteEmail}
-                      onChange={event => setInviteEmail(event.target.value)}
-                      placeholder="email@exemple.com"
-                      className="mt-4 w-full rounded-2xl border border-[#2A2D3E] bg-[#0F1117] px-4 py-3 text-sm text-white focus:border-[#4F8EF7] focus:outline-none"
-                    />
-
-                    {inviteError && <p className="mt-3 text-sm text-red-300">{inviteError}</p>}
-
-                    <button
-                      onClick={createInviteLink}
-                      disabled={inviteBusy}
-                      className="mt-4 w-full rounded-2xl bg-[#1D9E75] px-4 py-3 text-sm font-medium text-white transition-all hover:bg-[#178760] disabled:opacity-50"
-                    >
-                      {inviteBusy ? 'Creation...' : 'Generer un lien'}
-                    </button>
-
-                    {lastInviteLink && (
-                      <div className="mt-4 rounded-2xl border border-[#2A2D3E] bg-[#0F1117] p-3">
-                        <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Dernier lien cree</p>
-                        <p className="mt-2 break-all text-sm text-[#9EC0FF]">{lastInviteLink}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {!activeGroup?.is_global && activeGroupId && (
-                  <div className="rounded-[22px] border border-[#2A2D3E] bg-[#10141E] p-4">
-                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Invitations en attente</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Membres</p>
                     <div className="mt-4 space-y-3">
-                      {groupInvites.length === 0 && <p className="text-sm text-gray-500">Aucune invitation en attente.</p>}
-                      {groupInvites.map(invite => (
-                        <div key={invite.id} className="rounded-2xl border border-[#2A2D3E] bg-[#0F1117] p-3">
-                          <p className="text-sm font-medium text-white">{invite.target_email || 'Lien libre'}</p>
-                          <p className="mt-1 break-all text-xs text-gray-500">{`${window.location.origin}${window.location.pathname}?groupInvite=${invite.token}`}</p>
+                      {activeMembers.length === 0 && <p className="text-sm text-gray-500">Aucun membre charge.</p>}
+                      {activeMembers.map(member => (
+                        <div key={member.id} className="flex items-center gap-3">
+                          <AvatarBadge profile={member.profile} size="sm" />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-white">{member.profile?.full_name || 'Utilisateur'}</p>
+                            <p className="text-xs text-gray-500">{member.role === 'owner' ? 'Organisateur' : 'Membre'}</p>
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
-                )}
-              </aside>
-            </div>
+
+                  {!activeGroup?.is_global && (
+                    <div className="rounded-[22px] border border-[#2A2D3E] bg-[#10141E] p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Inviter un membre</p>
+                      <p className="mt-2 text-sm text-gray-400">
+                        Renseigne un email pour reserver le lien a une personne precise, ou laisse vide pour un lien partageable.
+                      </p>
+
+                      <input
+                        value={inviteEmail}
+                        onChange={event => setInviteEmail(event.target.value)}
+                        placeholder="email@exemple.com"
+                        className="mt-4 w-full rounded-2xl border border-[#2A2D3E] bg-[#0F1117] px-4 py-3 text-sm text-white focus:border-[#4F8EF7] focus:outline-none"
+                      />
+
+                      {inviteFeedback.text && (
+                        <p className={`mt-3 text-sm ${inviteFeedback.pendingSetup ? 'text-amber-200' : 'text-red-300'}`}>
+                          {inviteFeedback.text}
+                        </p>
+                      )}
+
+                      <button
+                        onClick={createInviteLink}
+                        disabled={inviteBusy || inviteFeedback.pendingSetup}
+                        className="mt-4 w-full rounded-2xl bg-[#1D9E75] px-4 py-3 text-sm font-medium text-white transition-all hover:bg-[#178760] disabled:opacity-50"
+                      >
+                        {inviteFeedback.pendingSetup ? 'Bientot disponible' : inviteBusy ? 'Creation...' : 'Generer un lien'}
+                      </button>
+
+                      {lastInviteLink && (
+                        <div className="mt-4 rounded-2xl border border-[#2A2D3E] bg-[#0F1117] p-3">
+                          <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Dernier lien cree</p>
+                          <p className="mt-2 break-all text-sm text-[#9EC0FF]">{lastInviteLink}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!activeGroup?.is_global && (
+                    <div className="rounded-[22px] border border-[#2A2D3E] bg-[#10141E] p-4">
+                      <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Invitations en attente</p>
+                      <div className="mt-4 space-y-3">
+                        {groupInvites.length === 0 && <p className="text-sm text-gray-500">Aucune invitation en attente.</p>}
+                        {groupInvites.map(invite => (
+                          <div key={invite.id} className="rounded-2xl border border-[#2A2D3E] bg-[#0F1117] p-3">
+                            <p className="text-sm font-medium text-white">{invite.target_email || 'Lien libre'}</p>
+                            <p className="mt-1 break-all text-xs text-gray-500">{`${window.location.origin}${window.location.pathname}?groupInvite=${invite.token}`}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </aside>
+              </div>
+            )}
           </section>
         </div>
       </div>
