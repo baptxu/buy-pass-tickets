@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 const STATUS_MAP = {
@@ -15,17 +15,53 @@ const STEP_KEYS = ['received', 'searching', 'proposed', 'payment', 'confirmed', 
 
 export default function ClientDashboard({ session }) {
   const [orders, setOrders] = useState([])
-  const [view, setView] = useState('list')
+  const [profile, setProfile] = useState(null)
+  const [view, setView] = useState('list') // list | new | detail | profile | reviews | about | cgu
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [messages, setMessages] = useState([])
   const [newMsg, setNewMsg] = useState('')
   const [activeTab, setActiveTab] = useState('detail')
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef()
   const [form, setForm] = useState({
     event_type: 'Concert', event_name: '', event_date: '',
     city: '', seats: 2, category: 'Fosse', budget: '', notes: ''
   })
 
-  useEffect(() => { fetchOrders() }, [])
+  useEffect(() => { fetchOrders(); fetchProfile() }, [])
+
+  // Fermer le menu si clic dehors
+  useEffect(() => {
+    function handleClick(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // Écoute en temps réel des nouveaux messages
+  useEffect(() => {
+    const channel = supabase
+      .channel('client-messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        // Si le message vient de l'admin et qu'on n'est pas dans le détail de cette commande
+        if (payload.new.sender_role === 'admin') {
+          setUnreadCount(c => c + 1)
+          // Si on est dans le bon détail, mettre à jour les messages
+          if (selectedOrder && payload.new.order_id === selectedOrder.id) {
+            setMessages(prev => [...prev, payload.new])
+          }
+        }
+      })
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [selectedOrder])
+
+  async function fetchProfile() {
+    const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+    setProfile(data)
+  }
 
   async function fetchOrders() {
     const { data } = await supabase.from('orders').select('*').eq('client_id', session.user.id).order('created_at', { ascending: false })
@@ -38,6 +74,7 @@ export default function ClientDashboard({ session }) {
     const { data } = await supabase.from('messages').select('*').eq('order_id', order.id).order('created_at')
     setMessages(data || [])
     setView('detail')
+    setUnreadCount(0)
   }
 
   async function sendMessage() {
@@ -57,17 +94,80 @@ export default function ClientDashboard({ session }) {
 
   async function logout() { await supabase.auth.signOut() }
 
+  const initials = profile?.full_name ? profile.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?'
+
   return (
     <div className="min-h-screen bg-[#0F1117]">
+      {/* Header */}
       <div className="bg-[#1A1D27] border-b border-[#2A2D3E] px-6 py-4 flex items-center justify-between">
-        <img src="/buypasslogo.png" alt="Buy Pass" className="h-8" />
-        <div className="flex items-center gap-4">
-          <span className="text-gray-400 text-sm">{session.user.email}</span>
-          <button onClick={logout} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg">Déconnexion</button>
+        <button onClick={() => setView('list')}>
+          <img src="/buypasslogo.png" alt="Buy Pass" className="h-8" />
+        </button>
+        <div className="flex items-center gap-3">
+          {/* Icône notification */}
+          <button onClick={() => { setView('list'); setUnreadCount(0) }} className="relative p-2 text-gray-400 hover:text-white transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 rounded-full text-white text-[10px] flex items-center justify-center font-bold animate-pulse">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* Menu profil */}
+          <div className="relative" ref={menuRef}>
+            <button onClick={() => setMenuOpen(o => !o)} className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="Avatar" className="w-8 h-8 rounded-full object-cover border border-[#2A2D3E]" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-[#4F8EF7]/20 border border-[#4F8EF7]/40 flex items-center justify-center text-[#4F8EF7] text-xs font-bold">
+                  {initials}
+                </div>
+              )}
+              <span className="text-gray-300 text-sm hidden sm:block">{profile?.full_name || session.user.email}</span>
+              <svg className={`w-4 h-4 text-gray-400 transition-transform ${menuOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {menuOpen && (
+              <div className="absolute right-0 top-12 w-52 bg-[#1A1D27] border border-[#2A2D3E] rounded-xl shadow-xl z-50 overflow-hidden">
+                <div className="px-4 py-3 border-b border-[#2A2D3E]">
+                  <p className="text-white text-sm font-medium">{profile?.full_name || 'Mon compte'}</p>
+                  <p className="text-gray-500 text-xs truncate">{session.user.email}</p>
+                </div>
+                {[
+                  { icon: '👤', label: 'Mon profil', action: () => { setView('profile'); setMenuOpen(false) } },
+                  { icon: '⭐', label: 'Avis clients', action: () => { setView('reviews'); setMenuOpen(false) } },
+                  { icon: 'ℹ️', label: 'À propos', action: () => { setView('about'); setMenuOpen(false) } },
+                  { icon: '📄', label: 'CGU', action: () => { setView('cgu'); setMenuOpen(false) } },
+                ].map(item => (
+                  <button key={item.label} onClick={item.action} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-[#0F1117] transition-colors">
+                    <span>{item.icon}</span> {item.label}
+                  </button>
+                ))}
+                <div className="border-t border-[#2A2D3E]">
+                  <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-[#0F1117] transition-colors">
+                    <span>🚪</span> Déconnexion
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
+      {/* Contenu */}
       <div className="max-w-4xl mx-auto px-6 py-8">
+
+        {/* Pages secondaires */}
+        {view === 'profile' && <Profile session={session} onBack={() => { setView('list'); fetchProfile() }} />}
+        {view === 'reviews' && <Reviews session={session} onBack={() => setView('list')} />}
+        {view === 'about' && <About onBack={() => setView('list')} />}
+        {view === 'cgu' && <CGU onBack={() => setView('list')} />}
+
         {view === 'list' && (
           <>
             <div className="flex items-center justify-between mb-6">
