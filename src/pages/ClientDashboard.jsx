@@ -22,13 +22,16 @@ function PageCGU({ onBack }) {
       </div>
       <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-8 text-sm text-gray-300 leading-relaxed space-y-4">
         <p className="text-gray-500 text-xs">Dernière mise à jour : janvier 2025</p>
-        <section><h3 className="text-white font-semibold mb-1">1. Objet</h3><p>Les présentes CGU régissent l'utilisation de Buy Pass Tickets. En utilisant ce service, vous les acceptez sans réserve.</p></section>
-        <section><h3 className="text-white font-semibold mb-1">2. Service</h3><p>Buy Pass Tickets est un intermédiaire pour l'achat de billets (concerts, matchs, festivals). Nous ne sommes pas une billetterie officielle.</p></section>
-        <section><h3 className="text-white font-semibold mb-1">3. Commandes</h3><p>La soumission d'une demande n'est pas un engagement. L'engagement intervient à l'acceptation du prix. Le paiement confirme la commande définitivement.</p></section>
-        <section><h3 className="text-white font-semibold mb-1">4. Prix</h3><p>Les prix incluent les frais de service et peuvent dépasser les prix officiels. Le paiement s'effectue selon les modalités communiquées par messagerie.</p></section>
-        <section><h3 className="text-white font-semibold mb-1">5. Authenticité</h3><p>Nous garantissons des billets authentiques. En cas de billet invalide à l'entrée, un remboursement intégral sera proposé.</p></section>
-        <section><h3 className="text-white font-semibold mb-1">6. Données personnelles</h3><p>Vos données sont traitées conformément au RGPD et utilisées uniquement pour la gestion de vos commandes. Contact Instagram : @buy_pass_tickets</p></section>
-        <section><h3 className="text-white font-semibold mb-1">7. Responsabilité</h3><p>Buy Pass Tickets ne peut être tenu responsable des annulations décidées par les organisateurs d'événements.</p></section>
+        {[
+          { title: '1. Objet', content: "Les présentes CGU régissent l'utilisation de Buy Pass Tickets. En utilisant ce service, vous les acceptez sans réserve." },
+          { title: '2. Service', content: "Buy Pass Tickets est un intermédiaire pour l'achat de billets. Nous ne sommes pas une billetterie officielle." },
+          { title: '3. Commandes', content: "La soumission d'une demande n'est pas un engagement. Le paiement confirme la commande définitivement." },
+          { title: '4. Prix', content: "Les prix incluent les frais de service. Le paiement s'effectue selon les modalités communiquées par messagerie." },
+          { title: '5. Authenticité', content: "Nous garantissons des billets authentiques. En cas de billet invalide, remboursement intégral." },
+          { title: '6. Données', content: "Vos données sont traitées conformément au RGPD. Contact Instagram : @buy_pass_tickets" },
+        ].map(s => (
+          <section key={s.title}><h3 className="text-white font-semibold mb-1">{s.title}</h3><p>{s.content}</p></section>
+        ))}
       </div>
     </div>
   )
@@ -36,21 +39,49 @@ function PageCGU({ onBack }) {
 
 export default function ClientDashboard({ session }) {
   const [orders, setOrders] = useState([])
+  const [events, setEvents] = useState([])
   const [view, setView] = useState('list')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [messages, setMessages] = useState([])
   const [newMsg, setNewMsg] = useState('')
   const [activeTab, setActiveTab] = useState('detail')
+  const [selectedEvent, setSelectedEvent] = useState(null)
   const [form, setForm] = useState({
     event_type: 'Concert', event_name: '', event_date: '',
-    city: '', seats: 2, category: 'Fosse', budget: '', notes: ''
+    city: '', seats: 2, category: '', budget: '', notes: ''
   })
+  const [isCustom, setIsCustom] = useState(false)
 
-  useEffect(() => { fetchOrders() }, [])
+  useEffect(() => { fetchOrders(); fetchEvents() }, [])
 
   async function fetchOrders() {
     const { data } = await supabase.from('orders').select('*').eq('client_id', session.user.id).order('created_at', { ascending: false })
     setOrders(data || [])
+  }
+
+  async function fetchEvents() {
+    const { data } = await supabase.from('events').select('*').eq('active', true).order('created_at', { ascending: false })
+    setEvents(data || [])
+  }
+
+  function selectEvent(event) {
+    setSelectedEvent(event)
+    setForm(f => ({
+      ...f,
+      event_name: event.name,
+      event_type: event.event_type,
+      event_date: event.date,
+      city: event.city,
+      category: event.categories?.[0]?.name || '',
+      budget: event.categories?.[0]?.price ? event.categories[0].price + '€' : '',
+    }))
+    setIsCustom(false)
+  }
+
+  function selectCustom() {
+    setSelectedEvent(null)
+    setIsCustom(true)
+    setForm({ event_type: 'Concert', event_name: '', event_date: '', city: '', seats: 2, category: '', budget: '', notes: '' })
   }
 
   async function openOrder(order) {
@@ -71,19 +102,21 @@ export default function ClientDashboard({ session }) {
 
   async function submitOrder() {
     await supabase.from('orders').insert({ ...form, client_id: session.user.id, status: 'received' })
-    setForm({ event_type: 'Concert', event_name: '', event_date: '', city: '', seats: 2, category: 'Fosse', budget: '', notes: '' })
+    setForm({ event_type: 'Concert', event_name: '', event_date: '', city: '', seats: 2, category: '', budget: '', notes: '' })
+    setSelectedEvent(null)
+    setIsCustom(false)
     fetchOrders()
     setView('list')
   }
 
   async function logout() { await supabase.auth.signOut() }
 
+  const selectedCats = selectedEvent?.categories || []
+
   return (
     <div className="min-h-screen bg-[#0F1117]">
       <div className="bg-[#1A1D27] border-b border-[#2A2D3E] px-6 py-4 flex items-center justify-between">
-        <button onClick={() => setView('list')}>
-          <img src="/buypasslogo.png" alt="Buy Pass" className="h-8" />
-        </button>
+        <button onClick={() => setView('list')}><img src="/buypasslogo.png" alt="Buy Pass" className="h-8" /></button>
         <div className="flex items-center gap-3">
           <button onClick={() => setView('cgu')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg transition-all">CGU</button>
           <span className="text-gray-400 text-sm hidden sm:block">{session.user.email}</span>
@@ -98,10 +131,7 @@ export default function ClientDashboard({ session }) {
         {view === 'list' && (
           <>
             <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-2xl font-bold text-white">Mes demandes</h2>
-                <p className="text-gray-400 text-sm mt-1">Suivez l'avancement de vos commandes</p>
-              </div>
+              <div><h2 className="text-2xl font-bold text-white">Mes demandes</h2><p className="text-gray-400 text-sm mt-1">Suivez l'avancement de vos commandes</p></div>
               <button onClick={() => setView('new')} className="bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white px-4 py-2 rounded-lg text-sm font-medium">+ Nouvelle demande</button>
             </div>
             {orders.length === 0 ? (
@@ -114,10 +144,7 @@ export default function ClientDashboard({ session }) {
                   return (
                     <div key={order.id} onClick={() => openOrder(order)} className="bg-[#1A1D27] border border-[#2A2D3E] hover:border-[#4F8EF7] rounded-xl p-5 cursor-pointer transition-all">
                       <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="font-semibold text-white text-lg">{order.event_name}</h3>
-                          <p className="text-gray-400 text-sm mt-1">{order.city} · {order.event_date} · {order.seats} place{order.seats > 1 ? 's' : ''} · {order.category}</p>
-                        </div>
+                        <div><h3 className="font-semibold text-white text-lg">{order.event_name}</h3><p className="text-gray-400 text-sm mt-1">{order.city} · {order.event_date} · {order.seats} place{order.seats > 1 ? 's' : ''} · {order.category}</p></div>
                         <span className={`text-xs px-3 py-1 rounded-full font-medium ${s.color}`}>{s.label}</span>
                       </div>
                       <div className="flex items-center mt-4">
@@ -146,38 +173,120 @@ export default function ClientDashboard({ session }) {
           <>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-white">Nouvelle demande</h2>
-              <button onClick={() => setView('list')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-2 rounded-lg">← Retour</button>
+              <button onClick={() => { setView('list'); setSelectedEvent(null); setIsCustom(false) }} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-2 rounded-lg">← Retour</button>
             </div>
-            <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-6 max-w-lg">
-              {[
-                { label: "Type d'événement", key: 'event_type', type: 'select', options: ['Concert', 'Football', 'Festival'] },
-                { label: "Nom de l'événement", key: 'event_name', type: 'text', placeholder: 'Ex : PSG vs Real Madrid' },
-                { label: 'Date', key: 'event_date', type: 'date' },
-                { label: 'Ville', key: 'city', type: 'text', placeholder: 'Paris' },
-                { label: 'Nombre de places', key: 'seats', type: 'number' },
-                { label: 'Catégorie', key: 'category', type: 'select', options: ['Fosse', 'Fosse Or', 'Catégorie 1', 'Catégorie 2', 'Catégorie 3', 'Catégorie 4', 'Carré Or', 'Loge / VIP'] },
-                { label: 'Budget max (optionnel)', key: 'budget', type: 'text', placeholder: '150€ par place' },
-              ].map(f => (
-                <div key={f.key} className="mb-4">
-                  <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">{f.label}</label>
-                  {f.type === 'select' ? (
-                    <select value={form[f.key]} onChange={e => setForm({...form, [f.key]: e.target.value})} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]">
-                      {f.options.map(o => <option key={o}>{o}</option>)}
-                    </select>
+
+            {/* Étape 1 : Choisir un événement */}
+            {!selectedEvent && !isCustom && (
+              <div>
+                <p className="text-gray-400 text-sm mb-4">Sélectionnez un événement disponible ou créez une demande personnalisée :</p>
+                <div className="grid grid-cols-1 gap-3 mb-4">
+                  {events.map(event => (
+                    <div key={event.id} onClick={() => selectEvent(event)} className="bg-[#1A1D27] border border-[#2A2D3E] hover:border-[#4F8EF7] rounded-xl p-4 cursor-pointer transition-all">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="text-white font-semibold">{event.name}</p>
+                          <p className="text-gray-400 text-xs mt-0.5">{event.city} · {event.date} · {event.event_type}</p>
+                        </div>
+                        <span className="text-xs bg-[#4F8EF7]/10 text-[#4F8EF7] border border-[#4F8EF7]/20 px-2 py-0.5 rounded-full">{event.event_type}</span>
+                      </div>
+                      {event.categories?.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {event.categories.map((cat, i) => (
+                            <span key={i} className="text-xs bg-[#0F1117] border border-[#2A2D3E] text-gray-300 px-2 py-0.5 rounded-full">{cat.name} — {cat.price}€</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button onClick={selectCustom} className="w-full border border-dashed border-[#2A2D3E] hover:border-[#4F8EF7] text-gray-400 hover:text-[#4F8EF7] py-4 rounded-xl text-sm transition-all">
+                  ✏️ Autre événement (demande personnalisée)
+                </button>
+              </div>
+            )}
+
+            {/* Étape 2 : Remplir le formulaire */}
+            {(selectedEvent || isCustom) && (
+              <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-6 max-w-lg">
+                {selectedEvent && (
+                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-[#2A2D3E]">
+                    <div>
+                      <p className="text-white font-semibold">{selectedEvent.name}</p>
+                      <p className="text-gray-400 text-xs">{selectedEvent.city} · {selectedEvent.date}</p>
+                    </div>
+                    <button onClick={() => { setSelectedEvent(null); setIsCustom(false) }} className="text-xs text-gray-500 hover:text-white border border-[#2A2D3E] px-2 py-1 rounded-lg">Changer</button>
+                  </div>
+                )}
+
+                {isCustom && (
+                  <>
+                    <div className="mb-4">
+                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Type d'événement</label>
+                      <select value={form.event_type} onChange={e => setForm({...form, event_type: e.target.value})} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]">
+                        {['Concert', 'Football', 'Festival', 'Autre'].map(o => <option key={o}>{o}</option>)}
+                      </select>
+                    </div>
+                    <div className="mb-4">
+                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Nom de l'événement</label>
+                      <input type="text" value={form.event_name} onChange={e => setForm({...form, event_name: e.target.value})} placeholder="Ex : PSG vs Real Madrid" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                    </div>
+                    <div className="mb-4">
+                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Date</label>
+                      <input type="date" value={form.event_date} onChange={e => setForm({...form, event_date: e.target.value})} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                    </div>
+                    <div className="mb-4">
+                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Ville</label>
+                      <input type="text" value={form.city} onChange={e => setForm({...form, city: e.target.value})} placeholder="Paris" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                    </div>
+                  </>
+                )}
+
+                <div className="mb-4">
+                  <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Nombre de places</label>
+                  <input type="number" value={form.seats} onChange={e => setForm({...form, seats: e.target.value})} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                </div>
+
+                <div className="mb-4">
+                  <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Catégorie</label>
+                  {selectedCats.length > 0 ? (
+                    <div className="flex flex-col gap-2">
+                      {selectedCats.map((cat, i) => (
+                        <div key={i} onClick={() => setForm(f => ({ ...f, category: cat.name, budget: cat.price + '€' }))} className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${form.category === cat.name ? 'border-[#4F8EF7] bg-[#4F8EF7]/10' : 'border-[#2A2D3E] bg-[#0F1117] hover:border-[#4F8EF7]/50'}`}>
+                          <span className="text-sm text-white">{cat.name}</span>
+                          <span className="text-sm font-semibold text-[#1D9E75]">{cat.price}€ / place</span>
+                        </div>
+                      ))}
+                    </div>
                   ) : (
-                    <input type={f.type} value={form[f.key]} onChange={e => setForm({...form, [f.key]: e.target.value})} placeholder={f.placeholder} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                    <input type="text" value={form.category} onChange={e => setForm({...form, category: e.target.value})} placeholder="Ex : Fosse, Cat 1..." className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
                   )}
                 </div>
-              ))}
-              <div className="mb-6">
-                <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Notes</label>
-                <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} rows={3} placeholder="Précisions..." className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7] resize-none" />
+
+                {isCustom && (
+                  <div className="mb-4">
+                    <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Budget max (optionnel)</label>
+                    <input type="text" value={form.budget} onChange={e => setForm({...form, budget: e.target.value})} placeholder="150€ par place" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                  </div>
+                )}
+
+                {form.category && form.budget && (
+                  <div className="mb-4 bg-[#1D9E75]/10 border border-[#1D9E75]/30 rounded-lg p-3">
+                    <p className="text-sm text-gray-300">💰 Prix estimé : <span className="text-[#1D9E75] font-bold">{parseInt(form.budget) * parseInt(form.seats) || form.budget}€</span> pour {form.seats} place{form.seats > 1 ? 's' : ''}</p>
+                  </div>
+                )}
+
+                <div className="mb-6">
+                  <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Notes (optionnel)</label>
+                  <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} rows={3} placeholder="Précisions..." className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7] resize-none" />
+                </div>
+
+                <div className="flex gap-3 justify-end">
+                  <button onClick={() => { setSelectedEvent(null); setIsCustom(false) }} className="border border-[#2A2D3E] text-gray-400 px-4 py-2 rounded-lg text-sm">← Retour</button>
+                  <button onClick={submitOrder} disabled={!form.event_name || !form.category} className="bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white px-6 py-2 rounded-lg text-sm font-medium disabled:opacity-50">Envoyer ma demande</button>
+                </div>
               </div>
-              <div className="flex gap-3 justify-end">
-                <button onClick={() => setView('list')} className="border border-[#2A2D3E] text-gray-400 px-4 py-2 rounded-lg text-sm">Annuler</button>
-                <button onClick={submitOrder} className="bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white px-6 py-2 rounded-lg text-sm font-medium">Envoyer ma demande</button>
-              </div>
-            </div>
+            )}
           </>
         )}
 
@@ -198,30 +307,12 @@ export default function ClientDashboard({ session }) {
               {activeTab === 'detail' && (
                 <div>
                   <div className="grid grid-cols-2 gap-3 mb-6">
-                    {[
-                      ['Événement', selectedOrder.event_name],
-                      ['Type', selectedOrder.event_type],
-                      ['Date', selectedOrder.event_date],
-                      ['Ville', selectedOrder.city],
-                      ['Places', `${selectedOrder.seats} × ${selectedOrder.category}`],
-                      ['Statut', STATUS_MAP[selectedOrder.status]?.label],
-                    ].map(([k, v]) => (
-                      <div key={k} className="bg-[#0F1117] rounded-lg p-3">
-                        <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">{k}</div>
-                        <div className="text-sm font-medium text-white">{v}</div>
-                      </div>
+                    {[['Événement', selectedOrder.event_name], ['Type', selectedOrder.event_type], ['Date', selectedOrder.event_date], ['Ville', selectedOrder.city], ['Places', `${selectedOrder.seats} × ${selectedOrder.category}`], ['Statut', STATUS_MAP[selectedOrder.status]?.label]].map(([k, v]) => (
+                      <div key={k} className="bg-[#0F1117] rounded-lg p-3"><div className="text-xs text-gray-500 uppercase tracking-wider mb-1">{k}</div><div className="text-sm font-medium text-white">{v}</div></div>
                     ))}
                   </div>
-                  {selectedOrder.price && (
-                    <div className="bg-[#1D9E75]/10 border border-[#1D9E75]/30 rounded-lg p-4 mb-4">
-                      <p className="text-sm text-gray-300">Prix total proposé : <span className="text-[#1D9E75] font-bold text-lg">{selectedOrder.price}</span></p>
-                    </div>
-                  )}
-                  {selectedOrder.ticket_url && (
-                    <a href={selectedOrder.ticket_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white px-4 py-2 rounded-lg text-sm">
-                      🎟️ Accéder à mes billets
-                    </a>
-                  )}
+                  {selectedOrder.price && <div className="bg-[#1D9E75]/10 border border-[#1D9E75]/30 rounded-lg p-4 mb-4"><p className="text-sm text-gray-300">Prix total proposé : <span className="text-[#1D9E75] font-bold text-lg">{selectedOrder.price}</span></p></div>}
+                  {selectedOrder.ticket_url && <a href={selectedOrder.ticket_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white px-4 py-2 rounded-lg text-sm">🎟️ Accéder à mes billets</a>}
                 </div>
               )}
               {activeTab === 'messages' && (
@@ -230,9 +321,7 @@ export default function ClientDashboard({ session }) {
                     {messages.length === 0 && <p className="text-gray-500 text-sm text-center py-8">Aucun message</p>}
                     {messages.map(m => (
                       <div key={m.id} className={`flex ${m.sender_role === 'client' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-xs px-4 py-2 rounded-xl text-sm ${m.sender_role === 'client' ? 'bg-[#4F8EF7] text-white' : 'bg-[#0F1117] border border-[#2A2D3E] text-gray-200'}`}>
-                          {m.content}
-                        </div>
+                        <div className={`max-w-xs px-4 py-2 rounded-xl text-sm ${m.sender_role === 'client' ? 'bg-[#4F8EF7] text-white' : 'bg-[#0F1117] border border-[#2A2D3E] text-gray-200'}`}>{m.content}</div>
                       </div>
                     ))}
                   </div>

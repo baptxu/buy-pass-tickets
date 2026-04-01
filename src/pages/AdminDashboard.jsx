@@ -12,10 +12,13 @@ const STATUS_MAP = {
 
 const STATUS_KEYS = ['received', 'searching', 'proposed', 'payment', 'confirmed', 'sent']
 
+const EMPTY_EVENT = { name: '', event_type: 'Concert', date: '', city: '', active: true, categories: [] }
+
 export default function AdminDashboard({ session }) {
   const [orders, setOrders] = useState([])
   const [profiles, setProfiles] = useState({})
   const [allProfiles, setAllProfiles] = useState([])
+  const [events, setEvents] = useState([])
   const [view, setView] = useState('table')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [selectedClient, setSelectedClient] = useState(null)
@@ -29,27 +32,24 @@ export default function AdminDashboard({ session }) {
   const [editTicket, setEditTicket] = useState('')
   const [editCost, setEditCost] = useState('')
   const [showArchived, setShowArchived] = useState(false)
+  // Event form
+  const [eventForm, setEventForm] = useState(EMPTY_EVENT)
+  const [editingEvent, setEditingEvent] = useState(null)
+  const [newCatName, setNewCatName] = useState('')
+  const [newCatPrice, setNewCatPrice] = useState('')
 
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
-    // Charger les commandes
-    const { data: ordersData } = await supabase
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const { data: ordersData } = await supabase.from('orders').select('*').order('created_at', { ascending: false })
     setOrders(ordersData || [])
-
-    // Charger TOUS les profils clients
-    const { data: profilesData } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('role', 'client')
-    
+    const { data: profilesData } = await supabase.from('profiles').select('*').eq('role', 'client')
     const map = {}
     profilesData?.forEach(p => { map[p.id] = p })
     setProfiles(map)
     setAllProfiles(profilesData || [])
+    const { data: eventsData } = await supabase.from('events').select('*').order('created_at', { ascending: false })
+    setEvents(eventsData || [])
   }
 
   async function openOrder(order) {
@@ -89,31 +89,61 @@ export default function AdminDashboard({ session }) {
     setMessages(data || [])
   }
 
+  async function saveEvent() {
+    if (!eventForm.name.trim()) return
+    if (editingEvent) {
+      await supabase.from('events').update(eventForm).eq('id', editingEvent.id)
+    } else {
+      await supabase.from('events').insert(eventForm)
+    }
+    setEventForm(EMPTY_EVENT)
+    setEditingEvent(null)
+    fetchAll()
+  }
+
+  async function deleteEvent(id) {
+    await supabase.from('events').delete().eq('id', id)
+    fetchAll()
+  }
+
+  async function toggleEvent(event) {
+    await supabase.from('events').update({ active: !event.active }).eq('id', event.id)
+    fetchAll()
+  }
+
+  function startEditEvent(event) {
+    setEditingEvent(event)
+    setEventForm({ name: event.name, event_type: event.event_type, date: event.date, city: event.city, active: event.active, categories: event.categories || [] })
+    setView('events')
+  }
+
+  function addCategory() {
+    if (!newCatName.trim() || !newCatPrice.trim()) return
+    setEventForm(f => ({ ...f, categories: [...f.categories, { name: newCatName, price: newCatPrice }] }))
+    setNewCatName('')
+    setNewCatPrice('')
+  }
+
+  function removeCategory(idx) {
+    setEventForm(f => ({ ...f, categories: f.categories.filter((_, i) => i !== idx) }))
+  }
+
   async function logout() { await supabase.auth.signOut() }
 
   const activeOrders = orders.filter(o => !o.archived)
   const archivedOrders = orders.filter(o => o.archived)
-
   const filtered = activeOrders.filter(o => {
     if (filterType !== 'all' && o.event_type !== filterType) return false
     if (filterStatus !== 'all' && o.status !== filterStatus) return false
     return true
   })
 
-  // Analytics
   const sentOrders = activeOrders.filter(o => o.status === 'sent')
-  const totalCA = sentOrders.reduce((sum, o) => {
-    const val = parseFloat((o.price || '0').replace(/[^0-9.]/g, ''))
-    return sum + (isNaN(val) ? 0 : val)
-  }, 0)
-  const totalCost = activeOrders.reduce((sum, o) => {
-    const val = parseFloat((o.cost || '0').replace(/[^0-9.]/g, ''))
-    return sum + (isNaN(val) ? 0 : val)
-  }, 0)
-  const totalTickets = sentOrders.reduce((sum, o) => sum + (parseInt(o.seats) || 0), 0)
+  const totalCA = sentOrders.reduce((sum, o) => { const v = parseFloat((o.price||'0').replace(/[^0-9.]/g,'')); return sum+(isNaN(v)?0:v) }, 0)
+  const totalCost = activeOrders.reduce((sum, o) => { const v = parseFloat((o.cost||'0').replace(/[^0-9.]/g,'')); return sum+(isNaN(v)?0:v) }, 0)
+  const totalTickets = sentOrders.reduce((sum, o) => sum+(parseInt(o.seats)||0), 0)
   const totalProfit = totalCA - totalCost
   const statusStats = STATUS_KEYS.map(k => ({ key: k, label: STATUS_MAP[k].label, count: activeOrders.filter(o => o.status === k).length }))
-
   const clientOrders = (clientId) => activeOrders.filter(o => o.client_id === clientId)
 
   return (
@@ -129,21 +159,115 @@ export default function AdminDashboard({ session }) {
             { icon: '🗂️', label: 'Kanban', key: 'kanban' },
             { icon: '📊', label: 'Analytics', key: 'analytics' },
             { icon: '👥', label: 'Clients', key: 'clients' },
+            { icon: '🎟️', label: 'Événements', key: 'events' },
           ].map(item => (
-            <button key={item.key} onClick={() => setView(item.key)} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${view === item.key || (item.key === 'table' && view === 'detail') ? 'bg-[#4F8EF7]/10 text-[#4F8EF7]' : 'text-gray-400 hover:text-white hover:bg-[#1A1D27]'}`}>
+            <button key={item.key} onClick={() => { setView(item.key); setEditingEvent(null); setEventForm(EMPTY_EVENT) }} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${view === item.key || (item.key === 'table' && view === 'detail') ? 'bg-[#4F8EF7]/10 text-[#4F8EF7]' : 'text-gray-400 hover:text-white hover:bg-[#1A1D27]'}`}>
               {item.icon} {item.label}
             </button>
           ))}
         </nav>
         <div className="px-3 py-4 border-t border-[#2A2D3E]">
-          <button onClick={logout} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-[#1A1D27] w-full">
-            🚪 Déconnexion
-          </button>
+          <button onClick={logout} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-[#1A1D27] w-full">🚪 Déconnexion</button>
         </div>
       </div>
 
       <div className="flex-1 overflow-auto">
         <div className="px-8 py-6">
+
+          {/* ÉVÉNEMENTS */}
+          {view === 'events' && (
+            <>
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-white">Événements</h2>
+                <p className="text-gray-400 text-sm mt-1">Gérez les événements visibles par les clients</p>
+              </div>
+              <div className="grid grid-cols-2 gap-6">
+                {/* Formulaire */}
+                <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-6">
+                  <h3 className="text-white font-semibold mb-4">{editingEvent ? '✏️ Modifier' : '➕ Nouvel événement'}</h3>
+                  <div className="mb-3">
+                    <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Nom</label>
+                    <input value={eventForm.name} onChange={e => setEventForm(f => ({...f, name: e.target.value}))} placeholder="Ex : Céline Dion" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                  </div>
+                  <div className="mb-3">
+                    <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Type</label>
+                    <select value={eventForm.event_type} onChange={e => setEventForm(f => ({...f, event_type: e.target.value}))} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]">
+                      {['Concert', 'Football', 'Festival', 'Autre'].map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="mb-3">
+                    <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Date</label>
+                    <input type="date" value={eventForm.date} onChange={e => setEventForm(f => ({...f, date: e.target.value}))} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                  </div>
+                  <div className="mb-4">
+                    <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Ville</label>
+                    <input value={eventForm.city} onChange={e => setEventForm(f => ({...f, city: e.target.value}))} placeholder="Paris" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                  </div>
+
+                  {/* Catégories */}
+                  <div className="mb-4">
+                    <label className="text-xs text-gray-400 uppercase tracking-wider mb-2 block">Catégories & Prix</label>
+                    <div className="flex flex-col gap-2 mb-2">
+                      {eventForm.categories.map((cat, idx) => (
+                        <div key={idx} className="flex items-center justify-between bg-[#0F1117] rounded-lg px-3 py-2">
+                          <span className="text-sm text-white">{cat.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-[#1D9E75] font-medium">{cat.price}€</span>
+                            <button onClick={() => removeCategory(idx)} className="text-red-400 hover:text-red-300 text-xs">✕</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Ex : Catégorie 1" className="flex-1 bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                      <input value={newCatPrice} onChange={e => setNewCatPrice(e.target.value)} placeholder="200" className="w-20 bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                      <button onClick={addCategory} className="bg-[#4F8EF7]/20 text-[#4F8EF7] border border-[#4F8EF7]/30 px-3 py-2 rounded-lg text-sm hover:bg-[#4F8EF7]/30 transition-all">+</button>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={saveEvent} className="flex-1 bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white py-2.5 rounded-lg text-sm font-medium">
+                      {editingEvent ? 'Modifier' : 'Créer'}
+                    </button>
+                    {editingEvent && (
+                      <button onClick={() => { setEditingEvent(null); setEventForm(EMPTY_EVENT) }} className="border border-[#2A2D3E] text-gray-400 px-4 py-2.5 rounded-lg text-sm">Annuler</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Liste événements */}
+                <div className="flex flex-col gap-3">
+                  {events.length === 0 && <p className="text-center text-gray-500 py-16">Aucun événement créé</p>}
+                  {events.map(event => (
+                    <div key={event.id} className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="text-white font-medium">{event.name}</p>
+                          <p className="text-gray-500 text-xs">{event.city} · {event.date} · {event.event_type}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => toggleEvent(event)} className={`text-xs px-2 py-1 rounded-full ${event.active ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                            {event.active ? '● Actif' : '○ Inactif'}
+                          </button>
+                        </div>
+                      </div>
+                      {event.categories?.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {event.categories.map((cat, i) => (
+                            <span key={i} className="text-xs bg-[#0F1117] border border-[#2A2D3E] text-gray-300 px-2 py-0.5 rounded-full">{cat.name} — {cat.price}€</span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <button onClick={() => startEditEvent(event)} className="text-xs border border-[#2A2D3E] hover:border-[#4F8EF7] text-gray-300 hover:text-[#4F8EF7] px-3 py-1.5 rounded-lg transition-all">Modifier</button>
+                        <button onClick={() => deleteEvent(event.id)} className="text-xs border border-[#2A2D3E] hover:border-red-400 text-gray-300 hover:text-red-400 px-3 py-1.5 rounded-lg transition-all">Supprimer</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* TABLE */}
           {view === 'table' && (
@@ -206,9 +330,7 @@ export default function AdminDashboard({ session }) {
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-300">{order.event_date}</td>
                           <td className="px-4 py-3 text-sm text-gray-300">{order.seats} × {order.category}</td>
-                          <td className="px-4 py-3">
-                            <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${s.color}`}>{s.label}</span>
-                          </td>
+                          <td className="px-4 py-3"><span className={`text-xs px-2.5 py-1 rounded-full font-medium ${s.color}`}>{s.label}</span></td>
                           <td className="px-4 py-3 flex gap-2">
                             <button onClick={() => openOrder(order)} className="text-xs border border-[#2A2D3E] hover:border-[#4F8EF7] text-gray-300 hover:text-[#4F8EF7] px-3 py-1.5 rounded-lg transition-all">Gérer</button>
                             <button onClick={() => archiveOrder(order.id)} className="text-xs border border-[#2A2D3E] hover:border-orange-400 text-gray-300 hover:text-orange-400 px-3 py-1.5 rounded-lg transition-all">Archiver</button>
@@ -251,10 +373,7 @@ export default function AdminDashboard({ session }) {
           {/* KANBAN */}
           {view === 'kanban' && (
             <>
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-white">Vue Kanban</h2>
-                <p className="text-gray-400 text-sm mt-1">Visualisez toutes vos commandes par statut</p>
-              </div>
+              <div className="mb-6"><h2 className="text-2xl font-bold text-white">Vue Kanban</h2><p className="text-gray-400 text-sm mt-1">Visualisez toutes vos commandes par statut</p></div>
               <div className="grid grid-cols-3 gap-4">
                 {STATUS_KEYS.map(key => {
                   const s = STATUS_MAP[key]
@@ -285,15 +404,12 @@ export default function AdminDashboard({ session }) {
           {/* ANALYTICS */}
           {view === 'analytics' && (
             <>
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-white">Analytics</h2>
-                <p className="text-gray-400 text-sm mt-1">Vue d'ensemble de votre activité</p>
-              </div>
+              <div className="mb-6"><h2 className="text-2xl font-bold text-white">Analytics</h2><p className="text-gray-400 text-sm mt-1">Vue d'ensemble de votre activité</p></div>
               <div className="grid grid-cols-4 gap-4 mb-8">
                 {[
-                  { label: 'CA Total', value: totalCA.toFixed(0) + '€', sub: 'Commandes envoyées', color: 'text-green-400' },
-                  { label: 'Coût Total', value: totalCost.toFixed(0) + '€', sub: 'Montant dépensé', color: 'text-red-400' },
-                  { label: 'Bénéfice', value: totalProfit.toFixed(0) + '€', sub: 'CA - Coûts', color: totalProfit >= 0 ? 'text-[#4F8EF7]' : 'text-red-400' },
+                  { label: 'CA Total', value: totalCA.toFixed(0)+'€', sub: 'Commandes envoyées', color: 'text-green-400' },
+                  { label: 'Coût Total', value: totalCost.toFixed(0)+'€', sub: 'Montant dépensé', color: 'text-red-400' },
+                  { label: 'Bénéfice', value: totalProfit.toFixed(0)+'€', sub: 'CA - Coûts', color: totalProfit >= 0 ? 'text-[#4F8EF7]' : 'text-red-400' },
                   { label: 'Billets vendus', value: totalTickets, sub: 'Places envoyées', color: 'text-purple-400' },
                 ].map(s => (
                   <div key={s.label} className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-5">
@@ -310,7 +426,7 @@ export default function AdminDashboard({ session }) {
                     <div key={s.key} className="flex items-center gap-3">
                       <span className="text-xs text-gray-400 w-40">{s.label}</span>
                       <div className="flex-1 bg-[#0F1117] rounded-full h-2">
-                        <div className="bg-[#4F8EF7] h-2 rounded-full transition-all" style={{ width: activeOrders.length > 0 ? `${(s.count / activeOrders.length) * 100}%` : '0%' }} />
+                        <div className="bg-[#4F8EF7] h-2 rounded-full" style={{ width: activeOrders.length > 0 ? `${(s.count/activeOrders.length)*100}%` : '0%' }} />
                       </div>
                       <span className="text-xs text-white font-medium w-6 text-right">{s.count}</span>
                     </div>
@@ -320,31 +436,23 @@ export default function AdminDashboard({ session }) {
               <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-6">
                 <h3 className="text-white font-semibold mb-4">Commandes avec prix</h3>
                 <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-[#2A2D3E]">
-                      {['Événement', 'Client', 'Prix vente', 'Coût', 'Marge'].map(h => (
-                        <th key={h} className="pb-3 text-left text-xs text-gray-500 uppercase tracking-wider">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
+                  <thead><tr className="border-b border-[#2A2D3E]">{['Événement','Client','Prix vente','Coût','Marge'].map(h=><th key={h} className="pb-3 text-left text-xs text-gray-500 uppercase tracking-wider">{h}</th>)}</tr></thead>
                   <tbody>
-                    {activeOrders.filter(o => o.price).map(order => {
-                      const price = parseFloat((order.price || '0').replace(/[^0-9.]/g, ''))
-                      const cost = parseFloat((order.cost || '0').replace(/[^0-9.]/g, ''))
-                      const margin = price - cost
-                      return (
-                        <tr key={order.id} className="border-b border-[#2A2D3E]">
-                          <td className="py-3 text-sm text-white">{order.event_name}</td>
-                          <td className="py-3 text-sm text-gray-400">{profiles[order.client_id]?.full_name || 'Client'}</td>
-                          <td className="py-3 text-sm text-green-400">{order.price || '-'}</td>
-                          <td className="py-3 text-sm text-red-400">{order.cost || '-'}</td>
-                          <td className={`py-3 text-sm font-medium ${margin >= 0 ? 'text-[#4F8EF7]' : 'text-red-400'}`}>{order.cost ? margin.toFixed(0) + '€' : '-'}</td>
-                        </tr>
-                      )
+                    {activeOrders.filter(o=>o.price).map(order=>{
+                      const price=parseFloat((order.price||'0').replace(/[^0-9.]/g,''))
+                      const cost=parseFloat((order.cost||'0').replace(/[^0-9.]/g,''))
+                      const margin=price-cost
+                      return(<tr key={order.id} className="border-b border-[#2A2D3E]">
+                        <td className="py-3 text-sm text-white">{order.event_name}</td>
+                        <td className="py-3 text-sm text-gray-400">{profiles[order.client_id]?.full_name||'Client'}</td>
+                        <td className="py-3 text-sm text-green-400">{order.price||'-'}</td>
+                        <td className="py-3 text-sm text-red-400">{order.cost||'-'}</td>
+                        <td className={`py-3 text-sm font-medium ${margin>=0?'text-[#4F8EF7]':'text-red-400'}`}>{order.cost?margin.toFixed(0)+'€':'-'}</td>
+                      </tr>)
                     })}
                   </tbody>
                 </table>
-                {activeOrders.filter(o => o.price).length === 0 && <p className="text-center text-gray-500 py-8">Aucune commande avec prix</p>}
+                {activeOrders.filter(o=>o.price).length===0&&<p className="text-center text-gray-500 py-8">Aucune commande avec prix</p>}
               </div>
             </>
           )}
@@ -352,10 +460,7 @@ export default function AdminDashboard({ session }) {
           {/* CLIENTS */}
           {view === 'clients' && (
             <>
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-white">Clients</h2>
-                <p className="text-gray-400 text-sm mt-1">{allProfiles.length} client{allProfiles.length > 1 ? 's' : ''} enregistré{allProfiles.length > 1 ? 's' : ''}</p>
-              </div>
+              <div className="mb-6"><h2 className="text-2xl font-bold text-white">Clients</h2><p className="text-gray-400 text-sm mt-1">{allProfiles.length} client{allProfiles.length>1?'s':''} enregistré{allProfiles.length>1?'s':''}</p></div>
               <div className="grid grid-cols-1 gap-4">
                 {allProfiles.map(client => {
                   const cOrders = clientOrders(client.id)
@@ -364,23 +469,21 @@ export default function AdminDashboard({ session }) {
                     <div key={client.id} onClick={() => { setSelectedClient(client); setView('clientdetail') }} className="bg-[#1A1D27] border border-[#2A2D3E] hover:border-[#4F8EF7] rounded-xl p-5 cursor-pointer transition-all">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-[#4F8EF7]/20 flex items-center justify-center text-[#4F8EF7] font-bold">
-                            {client.full_name?.[0]?.toUpperCase() || '?'}
-                          </div>
+                          <div className="w-10 h-10 rounded-full bg-[#4F8EF7]/20 flex items-center justify-center text-[#4F8EF7] font-bold">{client.full_name?.[0]?.toUpperCase()||'?'}</div>
                           <div>
-                            <p className="text-white font-medium">{client.full_name || 'Client inconnu'}</p>
-                            <p className="text-gray-500 text-xs">{client.phone || 'Pas de téléphone'}</p>
+                            <p className="text-white font-medium">{client.full_name||'Client inconnu'}</p>
+                            <p className="text-gray-500 text-xs">{client.phone||'Pas de téléphone'}</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm text-white">{cOrders.length} commande{cOrders.length > 1 ? 's' : ''}</p>
-                          {lastOrder && <p className="text-xs text-gray-500 mt-0.5">Dernière : {lastOrder.event_name}</p>}
+                          <p className="text-sm text-white">{cOrders.length} commande{cOrders.length>1?'s':''}</p>
+                          {lastOrder&&<p className="text-xs text-gray-500 mt-0.5">Dernière : {lastOrder.event_name}</p>}
                         </div>
                       </div>
                     </div>
                   )
                 })}
-                {allProfiles.length === 0 && <p className="text-center text-gray-500 py-16">Aucun client</p>}
+                {allProfiles.length===0&&<p className="text-center text-gray-500 py-16">Aucun client</p>}
               </div>
             </>
           )}
@@ -390,13 +493,8 @@ export default function AdminDashboard({ session }) {
             <>
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-[#4F8EF7]/20 flex items-center justify-center text-[#4F8EF7] font-bold text-lg">
-                    {selectedClient.full_name?.[0]?.toUpperCase() || '?'}
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-white">{selectedClient.full_name || 'Client'}</h2>
-                    <p className="text-gray-400 text-sm">{selectedClient.phone || 'Pas de téléphone'}</p>
-                  </div>
+                  <div className="w-12 h-12 rounded-full bg-[#4F8EF7]/20 flex items-center justify-center text-[#4F8EF7] font-bold text-lg">{selectedClient.full_name?.[0]?.toUpperCase()||'?'}</div>
+                  <div><h2 className="text-xl font-bold text-white">{selectedClient.full_name||'Client'}</h2><p className="text-gray-400 text-sm">{selectedClient.phone||'Pas de téléphone'}</p></div>
                 </div>
                 <button onClick={() => setView('clients')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-2 rounded-lg">← Retour</button>
               </div>
@@ -406,17 +504,14 @@ export default function AdminDashboard({ session }) {
                   return (
                     <div key={order.id} onClick={() => openOrder(order)} className="bg-[#1A1D27] border border-[#2A2D3E] hover:border-[#4F8EF7] rounded-xl p-5 cursor-pointer transition-all">
                       <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-white font-medium">{order.event_name}</p>
-                          <p className="text-gray-500 text-xs mt-1">{order.city} · {order.event_date} · {order.seats} place{order.seats > 1 ? 's' : ''}</p>
-                        </div>
+                        <div><p className="text-white font-medium">{order.event_name}</p><p className="text-gray-500 text-xs mt-1">{order.city} · {order.event_date} · {order.seats} place{order.seats>1?'s':''}</p></div>
                         <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${s.color}`}>{s.label}</span>
                       </div>
-                      {order.price && <p className="text-sm text-[#1D9E75] font-medium mt-2">{order.price}</p>}
+                      {order.price&&<p className="text-sm text-[#1D9E75] font-medium mt-2">{order.price}</p>}
                     </div>
                   )
                 })}
-                {clientOrders(selectedClient.id).length === 0 && <p className="text-center text-gray-500 py-16">Aucune commande</p>}
+                {clientOrders(selectedClient.id).length===0&&<p className="text-center text-gray-500 py-16">Aucune commande</p>}
               </div>
             </>
           )}
@@ -430,78 +525,49 @@ export default function AdminDashboard({ session }) {
               </div>
               <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-6 max-w-2xl">
                 <div className="flex gap-4 border-b border-[#2A2D3E] mb-6">
-                  {['detail', 'messages', 'actions'].map(tab => (
-                    <button key={tab} onClick={() => setActiveTab(tab)} className={`pb-3 text-sm font-medium border-b-2 transition-all ${activeTab === tab ? 'border-[#4F8EF7] text-white' : 'border-transparent text-gray-400'}`}>
-                      {tab === 'detail' ? 'Détail' : tab === 'messages' ? 'Messages' : 'Actions'}
+                  {['detail','messages','actions'].map(tab=>(
+                    <button key={tab} onClick={()=>setActiveTab(tab)} className={`pb-3 text-sm font-medium border-b-2 transition-all ${activeTab===tab?'border-[#4F8EF7] text-white':'border-transparent text-gray-400'}`}>
+                      {tab==='detail'?'Détail':tab==='messages'?'Messages':'Actions'}
                     </button>
                   ))}
                 </div>
-                {activeTab === 'detail' && (
+                {activeTab==='detail'&&(
                   <div className="grid grid-cols-2 gap-3">
-                    {[
-                      ['Client', profiles[selectedOrder.client_id]?.full_name || 'N/A'],
-                      ['Téléphone', profiles[selectedOrder.client_id]?.phone || 'N/A'],
-                      ['Événement', selectedOrder.event_name],
-                      ['Type', selectedOrder.event_type],
-                      ['Date', selectedOrder.event_date],
-                      ['Ville', selectedOrder.city],
-                      ['Places', `${selectedOrder.seats} × ${selectedOrder.category}`],
-                      ['Budget', selectedOrder.budget || 'Non précisé'],
-                    ].map(([k, v]) => (
-                      <div key={k} className="bg-[#0F1117] rounded-lg p-3">
-                        <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">{k}</div>
-                        <div className="text-sm font-medium text-white">{v}</div>
-                      </div>
+                    {[['Client',profiles[selectedOrder.client_id]?.full_name||'N/A'],['Téléphone',profiles[selectedOrder.client_id]?.phone||'N/A'],['Événement',selectedOrder.event_name],['Type',selectedOrder.event_type],['Date',selectedOrder.event_date],['Ville',selectedOrder.city],['Places',`${selectedOrder.seats} × ${selectedOrder.category}`],['Budget',selectedOrder.budget||'Non précisé']].map(([k,v])=>(
+                      <div key={k} className="bg-[#0F1117] rounded-lg p-3"><div className="text-xs text-gray-500 uppercase tracking-wider mb-1">{k}</div><div className="text-sm font-medium text-white">{v}</div></div>
                     ))}
-                    {selectedOrder.notes && (
-                      <div className="col-span-2 bg-[#0F1117] rounded-lg p-3">
-                        <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Notes</div>
-                        <div className="text-sm text-white">{selectedOrder.notes}</div>
-                      </div>
-                    )}
+                    {selectedOrder.notes&&<div className="col-span-2 bg-[#0F1117] rounded-lg p-3"><div className="text-xs text-gray-500 uppercase tracking-wider mb-1">Notes</div><div className="text-sm text-white">{selectedOrder.notes}</div></div>}
                   </div>
                 )}
-                {activeTab === 'messages' && (
+                {activeTab==='messages'&&(
                   <div>
                     <div className="flex flex-col gap-3 max-h-64 overflow-y-auto mb-4 p-2">
-                      {messages.length === 0 && <p className="text-gray-500 text-sm text-center py-8">Aucun message</p>}
-                      {messages.map(m => (
-                        <div key={m.id} className={`flex ${m.sender_role === 'admin' ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-xs px-4 py-2 rounded-xl text-sm ${m.sender_role === 'admin' ? 'bg-[#4F8EF7] text-white' : 'bg-[#0F1117] border border-[#2A2D3E] text-gray-200'}`}>
-                            {m.content}
-                          </div>
+                      {messages.length===0&&<p className="text-gray-500 text-sm text-center py-8">Aucun message</p>}
+                      {messages.map(m=>(
+                        <div key={m.id} className={`flex ${m.sender_role==='admin'?'justify-end':'justify-start'}`}>
+                          <div className={`max-w-xs px-4 py-2 rounded-xl text-sm ${m.sender_role==='admin'?'bg-[#4F8EF7] text-white':'bg-[#0F1117] border border-[#2A2D3E] text-gray-200'}`}>{m.content}</div>
                         </div>
                       ))}
                     </div>
                     <div className="flex gap-2">
-                      <input value={newMsg} onChange={e => setNewMsg(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendMessage()} placeholder="Votre message..." className="flex-1 bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                      <input value={newMsg} onChange={e=>setNewMsg(e.target.value)} onKeyDown={e=>e.key==='Enter'&&sendMessage()} placeholder="Votre message..." className="flex-1 bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
                       <button onClick={sendMessage} className="bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white px-4 py-2 rounded-lg text-sm">Envoyer</button>
                     </div>
                   </div>
                 )}
-                {activeTab === 'actions' && (
+                {activeTab==='actions'&&(
                   <div className="flex flex-col gap-4">
-                    <div>
-                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Statut</label>
-                      <select value={editStatus} onChange={e => setEditStatus(e.target.value)} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]">
-                        {STATUS_KEYS.map(k => <option key={k} value={k}>{STATUS_MAP[k].label}</option>)}
+                    <div><label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Statut</label>
+                      <select value={editStatus} onChange={e=>setEditStatus(e.target.value)} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]">
+                        {STATUS_KEYS.map(k=><option key={k} value={k}>{STATUS_MAP[k].label}</option>)}
                       </select>
                     </div>
-                    <div>
-                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Prix de vente</label>
-                      <input value={editPrice} onChange={e => setEditPrice(e.target.value)} placeholder="Ex : 280€" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Coût d'achat</label>
-                      <input value={editCost} onChange={e => setEditCost(e.target.value)} placeholder="Ex : 200€" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Lien billet</label>
-                      <input value={editTicket} onChange={e => setEditTicket(e.target.value)} placeholder="https://ticketmaster.fr/transfer/..." className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
-                    </div>
+                    <div><label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Prix de vente</label><input value={editPrice} onChange={e=>setEditPrice(e.target.value)} placeholder="Ex : 280€" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" /></div>
+                    <div><label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Coût d'achat</label><input value={editCost} onChange={e=>setEditCost(e.target.value)} placeholder="Ex : 200€" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" /></div>
+                    <div><label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Lien billet</label><input value={editTicket} onChange={e=>setEditTicket(e.target.value)} placeholder="https://ticketmaster.fr/transfer/..." className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" /></div>
                     <div className="flex gap-3">
                       <button onClick={saveOrder} className="flex-1 bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white py-2.5 rounded-lg text-sm font-medium">Enregistrer</button>
-                      <button onClick={() => archiveOrder(selectedOrder.id)} className="border border-orange-400/30 text-orange-400 hover:bg-orange-400/10 px-4 py-2.5 rounded-lg text-sm transition-all">📦 Archiver</button>
+                      <button onClick={()=>archiveOrder(selectedOrder.id)} className="border border-orange-400/30 text-orange-400 hover:bg-orange-400/10 px-4 py-2.5 rounded-lg text-sm transition-all">📦 Archiver</button>
                     </div>
                   </div>
                 )}
