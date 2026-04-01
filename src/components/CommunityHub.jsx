@@ -40,7 +40,12 @@ function parseFeatureError(rawMessage, feature) {
     message.includes('schema cache') ||
     message.includes('Could not find the table') ||
     message.includes('does not exist') ||
-    message.includes('infinite recursion detected in policy')
+    message.includes('infinite recursion detected in policy') ||
+    (
+      feature === 'chat' &&
+      message.includes('row-level security policy') &&
+      message.includes('chat_group_members')
+    )
 
   if (isPendingSetup) {
     return {
@@ -157,16 +162,13 @@ export default function CommunityHub({ session, orders, onBack, focusGroupId = n
 
     const memberResult = await supabase
       .from('chat_group_members')
-      .upsert(
-        {
-          group_id: group.id,
-          user_id: session.user.id,
-          role: 'member',
-        },
-        { onConflict: 'group_id,user_id' }
-      )
+      .insert({
+        group_id: group.id,
+        user_id: session.user.id,
+        role: 'member',
+      })
 
-    if (memberResult.error) {
+    if (memberResult.error && memberResult.error.code !== '23505') {
       setChatError(memberResult.error.message)
       return
     }
