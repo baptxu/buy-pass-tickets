@@ -27,7 +27,7 @@ function PageCGU({ onBack }) {
         <section><h3 className="text-white font-semibold mb-1">3. Commandes</h3><p>La soumission d'une demande n'est pas un engagement. L'engagement intervient à l'acceptation du prix. Le paiement confirme la commande définitivement.</p></section>
         <section><h3 className="text-white font-semibold mb-1">4. Prix</h3><p>Les prix incluent les frais de service et peuvent dépasser les prix officiels. Le paiement s'effectue selon les modalités communiquées par messagerie.</p></section>
         <section><h3 className="text-white font-semibold mb-1">5. Authenticité</h3><p>Nous garantissons des billets authentiques. En cas de billet invalide à l'entrée, un remboursement intégral sera proposé.</p></section>
-        <section><h3 className="text-white font-semibold mb-1">6. Données personnelles</h3><p>Vos données sont traitées conformément au RGPD et utilisées uniquement pour la gestion de vos commandes. Contact : contact@buypasstickets.fr</p></section>
+        <section><h3 className="text-white font-semibold mb-1">6. Données personnelles</h3><p>Vos données sont traitées conformément au RGPD et utilisées uniquement pour la gestion de vos commandes. Contact Instagram : @buy_pass_tickets</p></section>
         <section><h3 className="text-white font-semibold mb-1">7. Responsabilité</h3><p>Buy Pass Tickets ne peut être tenu responsable des annulations décidées par les organisateurs d'événements.</p></section>
       </div>
     </div>
