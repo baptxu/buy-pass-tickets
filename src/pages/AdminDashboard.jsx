@@ -197,7 +197,7 @@ export default function AdminDashboard({ session }) {
                   </div>
                   <div className="mb-3">
                     <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Date</label>
-                    <input type="date" value={eventForm.date} onChange={e => setEventForm(f => ({...f, date: e.target.value}))} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                    <input type="text" value={eventForm.date} onChange={e => setEventForm(f => ({...f, date: e.target.value}))} placeholder="Ex : 15/09/2026 ou plusieurs dates" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
                   </div>
                   <div className="mb-4">
                     <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Ville</label>
