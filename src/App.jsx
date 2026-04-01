@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import AdminDashboard from './pages/AdminDashboard'
 import ClientDashboard from './pages/ClientDashboard'
 import CommunityPreview from './pages/CommunityPreview'
+import About from './pages/About'
 
 function ResetPassword() {
   const [password, setPassword] = useState('')
@@ -56,10 +57,12 @@ function ResetPassword() {
 function App() {
   const searchParams = new URLSearchParams(window.location.search)
   const previewMode = searchParams.get('preview')
+  const aboutMode = searchParams.get('page') === 'about'
   const [session, setSession] = useState(null)
   const [role, setRole] = useState(null)
   const [loading, setLoading] = useState(true)
   const [isReset, setIsReset] = useState(false)
+  const [publicView, setPublicView] = useState(aboutMode ? 'about' : 'login')
 
   const fetchRole = useEffectEvent(async (userId) => {
     const { data } = await supabase
@@ -79,7 +82,6 @@ function App() {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // Détecter le lien de reset de mot de passe
       if (event === 'PASSWORD_RECOVERY') {
         setIsReset(true)
         setSession(session)
@@ -104,10 +106,15 @@ function App() {
     return <CommunityPreview section={searchParams.get('section') || 'all'} />
   }
 
-  // Si l'utilisateur vient d'un lien reset → formulaire nouveau mdp
   if (isReset) return <ResetPassword />
 
-  if (!session) return <Login />
+  if (!session) {
+    if (publicView === 'about') {
+      return <About onBackToLogin={() => setPublicView('login')} />
+    }
+    return <Login onShowAbout={() => setPublicView('about')} />
+  }
+
   if (role === 'admin') return <AdminDashboard session={session} />
   return <ClientDashboard session={session} />
 }
