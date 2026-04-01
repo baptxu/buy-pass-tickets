@@ -39,7 +39,8 @@ function parseFeatureError(rawMessage, feature) {
   const isPendingSetup =
     message.includes('schema cache') ||
     message.includes('Could not find the table') ||
-    message.includes('does not exist')
+    message.includes('does not exist') ||
+    message.includes('infinite recursion detected in policy')
 
   if (isPendingSetup) {
     return {
