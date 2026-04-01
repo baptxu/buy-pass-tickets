@@ -85,6 +85,23 @@ alter table public.chat_groups enable row level security;
 alter table public.chat_group_members enable row level security;
 alter table public.chat_messages enable row level security;
 
+create or replace function public.user_is_chat_group_member(target_group_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.chat_group_members
+    where group_id = target_group_id
+      and user_id = auth.uid()
+  );
+$$;
+
+grant execute on function public.user_is_chat_group_member(uuid) to authenticated;
+
 drop policy if exists "Members can read their groups" on public.chat_groups;
 create policy "Members can read their groups"
   on public.chat_groups
@@ -92,12 +109,7 @@ create policy "Members can read their groups"
   to authenticated
   using (
     is_global = true
-    or exists (
-      select 1
-      from public.chat_group_members
-      where chat_group_members.group_id = chat_groups.id
-        and chat_group_members.user_id = auth.uid()
-    )
+    or public.user_is_chat_group_member(id)
   );
 
 drop policy if exists "Authenticated users can create groups" on public.chat_groups;
@@ -114,12 +126,7 @@ create policy "Members can read memberships from their groups"
   to authenticated
   using (
     user_id = auth.uid()
-    or exists (
-      select 1
-      from public.chat_group_members as own_membership
-      where own_membership.group_id = chat_group_members.group_id
-        and own_membership.user_id = auth.uid()
-    )
+    or public.user_is_chat_group_member(group_id)
   );
 
 drop policy if exists "Users can join themselves to a group" on public.chat_group_members;
@@ -134,14 +141,7 @@ create policy "Members can read group messages"
   on public.chat_messages
   for select
   to authenticated
-  using (
-    exists (
-      select 1
-      from public.chat_group_members
-      where chat_group_members.group_id = chat_messages.group_id
-        and chat_group_members.user_id = auth.uid()
-    )
-  );
+  using (public.user_is_chat_group_member(group_id));
 
 drop policy if exists "Members can post messages in their groups" on public.chat_messages;
 create policy "Members can post messages in their groups"
@@ -150,12 +150,7 @@ create policy "Members can post messages in their groups"
   to authenticated
   with check (
     auth.uid() = sender_id
-    and exists (
-      select 1
-      from public.chat_group_members
-      where chat_group_members.group_id = chat_messages.group_id
-        and chat_group_members.user_id = auth.uid()
-    )
+    and public.user_is_chat_group_member(group_id)
   );
 
 create or replace function public.create_event_chat_group(target_order_id uuid)
