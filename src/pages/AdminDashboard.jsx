@@ -1,4 +1,4 @@
-import { useState, useEffect, useEffectEvent } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 const STATUS_MAP = {
@@ -37,24 +37,21 @@ export default function AdminDashboard({ session }) {
   const [newCatPrice, setNewCatPrice] = useState('')
   const [newDate, setNewDate] = useState('')
   const [newDateCity, setNewDateCity] = useState('')
+  const [checkedOrders, setCheckedOrders] = useState({})
+
+  useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
     const { data: ordersData } = await supabase.from('orders').select('*').order('created_at', { ascending: false })
     setOrders(ordersData || [])
-    const { data: profilesData } = await supabase.from('profiles').select('id, full_name, phone, role').eq('role', 'client')
+    const { data: profilesData } = await supabase.from('profiles').select('id, full_name, phone, role')
     const map = {}
     profilesData?.forEach(p => { map[p.id] = p })
     setProfiles(map)
-    setAllProfiles(profilesData || [])
+    setAllProfiles((profilesData || []).filter(p => p.role === 'client'))
     const { data: eventsData } = await supabase.from('events').select('*').order('created_at', { ascending: false })
     setEvents(eventsData || [])
   }
-
-  const loadAdminData = useEffectEvent(() => {
-    fetchAll()
-  })
-
-  useEffect(() => { loadAdminData() }, [])
 
   async function openOrder(order) {
     setSelectedOrder(order)
@@ -143,6 +140,16 @@ export default function AdminDashboard({ session }) {
     setEventForm(f => ({ ...f, dates: f.dates.filter((_, i) => i !== idx) }))
   }
 
+  async function toggleCheck(orderId) {
+    const isChecked = !checkedOrders[orderId]
+    setCheckedOrders(prev => ({ ...prev, [orderId]: isChecked }))
+    if (isChecked) {
+      // Notifier le client en passant le statut à "sent"
+      await supabase.from('orders').update({ status: 'sent' }).eq('id', orderId)
+      fetchAll()
+    }
+  }
+
   async function logout() { await supabase.auth.signOut() }
 
   const activeOrders = orders.filter(o => !o.archived)
@@ -161,6 +168,16 @@ export default function AdminDashboard({ session }) {
   const statusStats = STATUS_KEYS.map(k => ({ key: k, label: STATUS_MAP[k].label, count: activeOrders.filter(o => o.status === k).length }))
   const clientOrders = (clientId) => activeOrders.filter(o => o.client_id === clientId)
 
+  // DROP : grouper les commandes confirmées par événement + catégorie
+  const confirmedOrders = activeOrders.filter(o => o.status === 'confirmed')
+  const dropGroups = {}
+  confirmedOrders.forEach(order => {
+    const key = `${order.event_name}|||${order.category}|||${order.event_date}`
+    if (!dropGroups[key]) dropGroups[key] = { event_name: order.event_name, category: order.category, event_date: order.event_date, city: order.city, orders: [] }
+    dropGroups[key].orders.push(order)
+  })
+  const dropGroupList = Object.values(dropGroups)
+
   return (
     <div className="min-h-screen bg-[#0F1117] flex">
       <div className="w-56 bg-[#13151F] border-r border-[#2A2D3E] flex flex-col">
@@ -172,12 +189,16 @@ export default function AdminDashboard({ session }) {
           {[
             { icon: '📋', label: 'Commandes', key: 'table' },
             { icon: '🗂️', label: 'Kanban', key: 'kanban' },
+            { icon: '🎯', label: 'Drop', key: 'drop' },
             { icon: '📊', label: 'Analytics', key: 'analytics' },
             { icon: '👥', label: 'Clients', key: 'clients' },
             { icon: '🎟️', label: 'Événements', key: 'events' },
           ].map(item => (
             <button key={item.key} onClick={() => { setView(item.key); setEditingEvent(null); setEventForm(EMPTY_EVENT) }} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${view === item.key || (item.key === 'table' && view === 'detail') ? 'bg-[#4F8EF7]/10 text-[#4F8EF7]' : 'text-gray-400 hover:text-white hover:bg-[#1A1D27]'}`}>
               {item.icon} {item.label}
+              {item.key === 'drop' && confirmedOrders.length > 0 && (
+                <span className="ml-auto text-xs bg-teal-500/20 text-teal-400 px-1.5 py-0.5 rounded-full">{confirmedOrders.length}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -188,6 +209,71 @@ export default function AdminDashboard({ session }) {
 
       <div className="flex-1 overflow-auto">
         <div className="px-8 py-6">
+
+          {/* DROP */}
+          {view === 'drop' && (
+            <>
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-white">🎯 Drop</h2>
+                <p className="text-gray-400 text-sm mt-1">Commandes confirmées — cochez les places trouvées pour notifier les clients</p>
+              </div>
+              {dropGroupList.length === 0 ? (
+                <div className="text-center py-16 text-gray-500">Aucune commande confirmée pour l'instant</div>
+              ) : (
+                <div className="flex flex-col gap-6">
+                  {dropGroupList.map((group, gi) => (
+                    <div key={gi} className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl overflow-hidden">
+                      <div className="px-5 py-4 border-b border-[#2A2D3E] flex items-center justify-between">
+                        <div>
+                          <p className="text-white font-semibold text-lg">{group.event_name}</p>
+                          <p className="text-gray-400 text-xs mt-0.5">{group.event_date} · {group.city}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs bg-[#4F8EF7]/10 text-[#4F8EF7] border border-[#4F8EF7]/20 px-2.5 py-1 rounded-full font-medium">{group.category}</span>
+                          <span className="text-xs bg-[#0F1117] text-gray-400 border border-[#2A2D3E] px-2.5 py-1 rounded-full">{group.orders.length} demande{group.orders.length > 1 ? 's' : ''}</span>
+                        </div>
+                      </div>
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-[#2A2D3E]">
+                            {['Client', 'Places', 'Prix vendu', 'Notes', 'Trouvé ✓'].map(h => (
+                              <th key={h} className="px-4 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.orders.map(order => {
+                            const isChecked = checkedOrders[order.id] || order.status === 'sent'
+                            const profile = profiles[order.client_id]
+                            return (
+                              <tr key={order.id} className={`border-b border-[#2A2D3E] transition-all ${isChecked ? 'opacity-40 bg-[#0F1117]' : 'hover:bg-[#1E2130]'}`}>
+                                <td className="px-4 py-3">
+                                  <p className={`text-sm font-medium text-white ${isChecked ? 'line-through' : ''}`}>{profile?.full_name || 'Client'}</p>
+                                  <p className="text-xs text-gray-500">{profile?.phone || ''}</p>
+                                </td>
+                                <td className={`px-4 py-3 text-sm text-gray-300 ${isChecked ? 'line-through' : ''}`}>{order.seats} place{order.seats > 1 ? 's' : ''}</td>
+                                <td className={`px-4 py-3 text-sm font-medium ${isChecked ? 'line-through text-gray-500' : 'text-[#1D9E75]'}`}>{order.price || '—'}</td>
+                                <td className={`px-4 py-3 text-sm text-gray-400 ${isChecked ? 'line-through' : ''}`}>{order.notes || '—'}</td>
+                                <td className="px-4 py-3">
+                                  <button
+                                    onClick={() => !isChecked && toggleCheck(order.id)}
+                                    disabled={isChecked}
+                                    className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${isChecked ? 'bg-[#1D9E75] border-[#1D9E75] cursor-default' : 'border-[#2A2D3E] hover:border-[#1D9E75] hover:bg-[#1D9E75]/10 cursor-pointer'}`}
+                                  >
+                                    {isChecked && <span className="text-white text-xs font-bold">✓</span>}
+                                  </button>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
 
           {/* ÉVÉNEMENTS */}
           {view === 'events' && (
@@ -209,8 +295,6 @@ export default function AdminDashboard({ session }) {
                       {['Concert', 'Football', 'Festival', 'Autre'].map(t => <option key={t}>{t}</option>)}
                     </select>
                   </div>
-
-                  {/* Dates & Villes */}
                   <div className="mb-4">
                     <label className="text-xs text-gray-400 uppercase tracking-wider mb-2 block">Dates & Villes</label>
                     <div className="flex flex-col gap-2 mb-2">
@@ -227,8 +311,6 @@ export default function AdminDashboard({ session }) {
                       <button onClick={addDate} className="bg-[#4F8EF7]/20 text-[#4F8EF7] border border-[#4F8EF7]/30 px-3 py-2 rounded-lg text-sm hover:bg-[#4F8EF7]/30 transition-all">+</button>
                     </div>
                   </div>
-
-                  {/* Catégories */}
                   <div className="mb-4">
                     <label className="text-xs text-gray-400 uppercase tracking-wider mb-2 block">Catégories & Prix</label>
                     <div className="flex flex-col gap-2 mb-2">
@@ -248,13 +330,11 @@ export default function AdminDashboard({ session }) {
                       <button onClick={addCategory} className="bg-[#4F8EF7]/20 text-[#4F8EF7] border border-[#4F8EF7]/30 px-3 py-2 rounded-lg text-sm hover:bg-[#4F8EF7]/30 transition-all">+</button>
                     </div>
                   </div>
-
                   <div className="flex gap-2">
                     <button onClick={saveEvent} className="flex-1 bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white py-2.5 rounded-lg text-sm font-medium">{editingEvent ? 'Modifier' : 'Créer'}</button>
                     {editingEvent && <button onClick={() => { setEditingEvent(null); setEventForm(EMPTY_EVENT) }} className="border border-[#2A2D3E] text-gray-400 px-4 py-2.5 rounded-lg text-sm">Annuler</button>}
                   </div>
                 </div>
-
                 <div className="flex flex-col gap-3">
                   {events.length === 0 && <p className="text-center text-gray-500 py-16">Aucun événement créé</p>}
                   {events.map(event => (
