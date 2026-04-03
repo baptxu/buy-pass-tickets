@@ -142,14 +142,12 @@ export default function AdminDashboard({ session }) {
   }
 
   async function toggleCheck(orderId) {
-    const isChecked = !checkedOrders[orderId]
-    setCheckedOrders(prev => ({ ...prev, [orderId]: isChecked }))
-    if (isChecked) {
-      // Notifier le client en passant le statut à "sent"
-      await supabase.from('orders').update({ status: 'sent' }).eq('id', orderId)
-      fetchAll()
-    }
-  }
+  const alreadyChecked = checkedOrders[orderId]
+  if (alreadyChecked) return
+  setCheckedOrders(prev => ({ ...prev, [orderId]: true }))
+  await supabase.from('orders').update({ status: 'obtained' }).eq('id', orderId)
+  fetchAll()
+}
 
   async function logout() { await supabase.auth.signOut() }
 
