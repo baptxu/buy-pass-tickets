@@ -142,8 +142,7 @@ export default function AdminDashboard({ session }) {
   }
 
   async function toggleCheck(orderId) {
-  const alreadyChecked = checkedOrders[orderId]
-  if (alreadyChecked) return
+  if (checkedOrders[orderId]) return
   setCheckedOrders(prev => ({ ...prev, [orderId]: true }))
   await supabase.from('orders').update({ status: 'obtained' }).eq('id', orderId)
   fetchAll()
@@ -242,7 +241,7 @@ export default function AdminDashboard({ session }) {
                         </thead>
                         <tbody>
                           {group.orders.map(order => {
-                            const isChecked = checkedOrders[order.id] || order.status === 'sent'
+                            const isChecked = checkedOrders[order.id] || order.status === 'obtained' || order.status === 'sent'
                             const profile = profiles[order.client_id]
                             return (
                               <tr key={order.id} className={`border-b border-[#2A2D3E] transition-all ${isChecked ? 'opacity-40 bg-[#0F1117]' : 'hover:bg-[#1E2130]'}`}>
