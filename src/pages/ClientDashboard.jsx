@@ -216,8 +216,9 @@ export default function ClientDashboard({ session }) {
                         {STEPS.map((step, i) => (
                           <div key={i} className="flex items-center flex-1">
                             <div className="flex flex-col items-center">
-                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${i < idx ? 'bg-[#1D9E75] border-[#1D9E75]' : i === idx ? 'border-[#4F8EF7] bg-[#4F8EF7]/20' : 'border-[#2A2D3E]'}`}>
-                                {i < idx && <span className="text-white text-[8px]">✓</span>}
+                              {/* CORRECTION : i <= idx pour cocher l'étape courante en vert */}
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${i <= idx ? 'bg-[#1D9E75] border-[#1D9E75]' : 'border-[#2A2D3E]'}`}>
+                                {i <= idx && <span className="text-white text-[8px]">✓</span>}
                               </div>
                               <span className="text-[9px] text-gray-500 mt-1 text-center w-12">{step}</span>
                             </div>
@@ -241,7 +242,6 @@ export default function ClientDashboard({ session }) {
               <button onClick={() => { setView('list'); setSelectedEvent(null); setIsCustom(false) }} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-2 rounded-lg">← Retour</button>
             </div>
 
-            {/* Étape 1 : Choisir un événement */}
             {!selectedEvent && !isCustom && (
               <div>
                 <p className="text-gray-400 text-sm mb-4">Sélectionnez un événement disponible ou créez une demande personnalisée :</p>
@@ -278,7 +278,6 @@ export default function ClientDashboard({ session }) {
               </div>
             )}
 
-            {/* Étape 2 : Formulaire */}
             {(selectedEvent || isCustom) && (
               <div className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-6 max-w-lg">
                 {selectedEvent && (
@@ -311,7 +310,6 @@ export default function ClientDashboard({ session }) {
                   </>
                 )}
 
-                {/* Sélection date si événement prédéfini */}
                 {selectedEvent && selectedDates.length > 0 && (
                   <div className="mb-4">
                     <label className="text-xs text-gray-400 uppercase tracking-wider mb-2 block">Choisir une date</label>
@@ -331,7 +329,6 @@ export default function ClientDashboard({ session }) {
                   <input type="number" value={form.seats} onChange={e => setForm({...form, seats: e.target.value})} min="1" className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
                 </div>
 
-                {/* Sélection catégorie */}
                 <div className="mb-4">
                   <label className="text-xs text-gray-400 uppercase tracking-wider mb-2 block">Catégorie</label>
                   {selectedCats.length > 0 ? (
@@ -348,7 +345,6 @@ export default function ClientDashboard({ session }) {
                   )}
                 </div>
 
-                {/* Récapitulatif prix */}
                 {form.category && form.budget && (
                   <div className="mb-4 bg-[#1D9E75]/10 border border-[#1D9E75]/30 rounded-lg p-3">
                     <p className="text-sm text-gray-300">💰 Prix estimé : <span className="text-[#1D9E75] font-bold">{parseInt(form.budget) * parseInt(form.seats) || form.budget}€</span> pour {form.seats} place{form.seats > 1 ? 's' : ''}</p>
