@@ -6,11 +6,12 @@ const STATUS_MAP = {
   searching: { label: 'En recherche',        color: 'bg-blue-500/20 text-blue-300' },
   proposed:  { label: 'Prix proposé',        color: 'bg-purple-500/20 text-purple-300' },
   payment:   { label: 'Paiement en attente', color: 'bg-orange-500/20 text-orange-300' },
-  confirmed: { label: 'Confirmée',           color: 'bg-teal-500/20 text-teal-300' },
+  confirmed: { label: 'Commande confirmée',           color: 'bg-teal-500/20 text-teal-300' },
+  obtained:  { label: 'Billets obtenus',     color: 'bg-cyan-500/20 text-cyan-300' },
   sent:      { label: 'Billets envoyés',     color: 'bg-green-500/20 text-green-300' },
 }
 
-const STATUS_KEYS = ['received', 'searching', 'proposed', 'payment', 'confirmed', 'sent']
+const STATUS_KEYS = ['received', 'searching', 'proposed', 'payment', 'confirmed', 'obtained', 'sent']
 const EMPTY_EVENT = { name: '', event_type: 'Concert', active: true, categories: [], dates: [] }
 
 export default function AdminDashboard({ session }) {
