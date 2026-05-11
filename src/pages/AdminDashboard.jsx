@@ -146,9 +146,11 @@ export default function AdminDashboard({ session }) {
   // Marketplace state
   const [marketplaceListings, setMarketplaceListings] = useState([])
   const [marketplaceReservations, setMarketplaceReservations] = useState([])
-  const [marketplaceForm, setMarketplaceForm] = useState({ event_name: '', event_date: '', city: '', category: '', quantity: 1, price: '', description: '', status: 'active' })
+  const [marketplaceForm, setMarketplaceForm] = useState({ event_name: '', event_date: '', city: '', category: '', quantity: 1, price: '', description: '', status: 'active', image_url: '' })
   const [editingListing, setEditingListing] = useState(null)
   const [marketplaceTab, setMarketplaceTab] = useState('list')
+  const [listingImageFile, setListingImageFile] = useState(null)
+  const [listingImagePreview, setListingImagePreview] = useState(null)
 
   // Products state
   const [products, setProducts] = useState([])
@@ -282,9 +284,21 @@ export default function AdminDashboard({ session }) {
 
   async function saveListing() {
     if (!marketplaceForm.event_name.trim() || !marketplaceForm.price) return
-    if (editingListing) await supabase.from('marketplace_listings').update(marketplaceForm).eq('id', editingListing.id)
-    else await supabase.from('marketplace_listings').insert(marketplaceForm)
-    setMarketplaceForm({ event_name: '', event_date: '', city: '', category: '', quantity: 1, price: '', description: '', status: 'active' })
+    let imageUrl = marketplaceForm.image_url || null
+    if (listingImageFile) {
+      const ext = listingImageFile.name.split('.').pop()
+      const fileName = `listing-${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('marketplace').upload(fileName, listingImageFile, { upsert: true })
+      if (!error) {
+        const { data: urlData } = supabase.storage.from('marketplace').getPublicUrl(fileName)
+        imageUrl = urlData.publicUrl
+      }
+    }
+    const formToSave = { ...marketplaceForm, image_url: imageUrl }
+    if (editingListing) await supabase.from('marketplace_listings').update(formToSave).eq('id', editingListing.id)
+    else await supabase.from('marketplace_listings').insert(formToSave)
+    setMarketplaceForm({ event_name: '', event_date: '', city: '', category: '', quantity: 1, price: '', description: '', status: 'active', image_url: '' })
+    setListingImageFile(null); setListingImagePreview(null)
     setEditingListing(null); setMarketplaceTab('list'); fetchAll()
   }
 
@@ -297,7 +311,9 @@ export default function AdminDashboard({ session }) {
 
   function startEditListing(l) {
     setEditingListing(l)
-    setMarketplaceForm({ event_name: l.event_name, event_date: l.event_date || '', city: l.city || '', category: l.category || '', quantity: l.quantity || 1, price: l.price || '', description: l.description || '', status: l.status || 'active' })
+    setMarketplaceForm({ event_name: l.event_name, event_date: l.event_date || '', city: l.city || '', category: l.category || '', quantity: l.quantity || 1, price: l.price || '', description: l.description || '', status: l.status || 'active', image_url: l.image_url || '' })
+    setListingImageFile(null)
+    setListingImagePreview(null)
     setMarketplaceTab('form')
   }
 
@@ -1267,6 +1283,19 @@ export default function AdminDashboard({ session }) {
                 {marketplaceTab === 'form' && (
                   <Card className="p-6 mb-6 max-w-xl">
                     <h3 className="text-white font-semibold mb-4">{editingListing ? '✏️ Modifier l\'annonce' : '➕ Nouvelle annonce'}</h3>
+                    <div className="mb-4">
+                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Photo de l'événement</label>
+                      {(listingImagePreview || marketplaceForm.image_url) && (
+                        <img src={listingImagePreview || marketplaceForm.image_url} alt="preview" className="w-full h-36 object-cover rounded-lg mb-2" />
+                      )}
+                      <label className="flex items-center justify-center gap-2 w-full bg-[#0F1117] border border-dashed border-[#2A2D3E] hover:border-[#4F8EF7] rounded-lg py-3 cursor-pointer transition-all">
+                        <span className="text-gray-400 text-sm">📷 {listingImagePreview || marketplaceForm.image_url ? 'Changer la photo' : 'Ajouter une photo'}</span>
+                        <input type="file" accept="image/*" className="hidden" onChange={e => {
+                          const file = e.target.files[0]
+                          if (file) { setListingImageFile(file); setListingImagePreview(URL.createObjectURL(file)) }
+                        }} />
+                      </label>
+                    </div>
                     <div className="grid grid-cols-2 gap-3 mb-3">
                       {[['Événement', 'event_name', 'Ex : Beyoncé – Paris'], ['Date', 'event_date', '15/09/2026'], ['Ville', 'city', 'Paris'], ['Catégorie', 'category', 'Fosse'], ['Quantité', 'quantity', '2'], ['Prix (€)', 'price', '150']].map(([label, field, ph]) => (
                         <div key={field}>
@@ -1291,26 +1320,33 @@ export default function AdminDashboard({ session }) {
                   {marketplaceListings.map(listing => {
                     const listingRes = marketplaceReservations.filter(r => r.listing_id === listing.id && r.status === 'pending')
                     return (
-                      <Card key={listing.id} className={`p-5 transition-all ${listing.status === 'paused' ? 'opacity-60' : ''}`}>
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="text-white font-semibold">{listing.event_name}</p>
-                            <p className="text-gray-400 text-xs mt-0.5">{listing.event_date}{listing.city ? ` · ${listing.city}` : ''}{listing.category ? ` · ${listing.category}` : ''}</p>
-                            {listing.description && <p className="text-gray-500 text-xs mt-1">{listing.description}</p>}
+                      <Card key={listing.id} className={`overflow-hidden transition-all ${listing.status === 'paused' ? 'opacity-60' : ''}`}>
+                      <div className="flex">
+                        {listing.image_url && (
+                          <img src={listing.image_url} alt={listing.event_name} className="w-28 object-cover flex-shrink-0" />
+                        )}
+                        <div className="p-5 flex-1">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="text-white font-semibold">{listing.event_name}</p>
+                              <p className="text-gray-400 text-xs mt-0.5">{listing.event_date}{listing.city ? ` · ${listing.city}` : ''}{listing.category ? ` · ${listing.category}` : ''}</p>
+                              {listing.description && <p className="text-gray-500 text-xs mt-1">{listing.description}</p>}
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                              <span className="text-[#4F8EF7] font-bold">{listing.price}€ <span className="text-gray-500 font-normal text-xs">× {listing.quantity}</span></span>
+                              <button onClick={() => toggleListing(listing)} className={`text-xs px-2 py-1 rounded-full ${listing.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>{listing.status === 'active' ? '● Actif' : '○ Pausé'}</button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-                            <span className="text-[#4F8EF7] font-bold">{listing.price}€ <span className="text-gray-500 font-normal text-xs">× {listing.quantity}</span></span>
-                            <button onClick={() => toggleListing(listing)} className={`text-xs px-2 py-1 rounded-full ${listing.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>{listing.status === 'active' ? '● Actif' : '○ Pausé'}</button>
+                          <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#2A2D3E]">
+                            <span className={`text-xs ${listingRes.length > 0 ? 'text-orange-400 font-medium' : 'text-gray-500'}`}>{listingRes.length} réservation{listingRes.length !== 1 ? 's' : ''} en attente</span>
+                            <div className="flex gap-2">
+                              <button onClick={() => startEditListing(listing)} className="text-xs border border-[#2A2D3E] hover:border-[#4F8EF7] text-gray-300 hover:text-[#4F8EF7] px-3 py-1.5 rounded-lg transition-all">Modifier</button>
+                              <button onClick={() => deleteListing(listing.id)} className="text-xs border border-[#2A2D3E] hover:border-red-400 text-gray-300 hover:text-red-400 px-3 py-1.5 rounded-lg transition-all">Supprimer</button>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#2A2D3E]">
-                          <span className={`text-xs ${listingRes.length > 0 ? 'text-orange-400 font-medium' : 'text-gray-500'}`}>{listingRes.length} réservation{listingRes.length !== 1 ? 's' : ''} en attente</span>
-                          <div className="flex gap-2">
-                            <button onClick={() => startEditListing(listing)} className="text-xs border border-[#2A2D3E] hover:border-[#4F8EF7] text-gray-300 hover:text-[#4F8EF7] px-3 py-1.5 rounded-lg transition-all">Modifier</button>
-                            <button onClick={() => deleteListing(listing.id)} className="text-xs border border-[#2A2D3E] hover:border-red-400 text-gray-300 hover:text-red-400 px-3 py-1.5 rounded-lg transition-all">Supprimer</button>
-                          </div>
-                        </div>
-                      </Card>
+                      </div>
+                    </Card>
                     )
                   })}
                 </div>

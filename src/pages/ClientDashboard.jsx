@@ -253,20 +253,36 @@ export default function ClientDashboard({ session }) {
               {marketplaceListings.map(listing => {
                 const myRes = myReservations.find(r => r.listing_id === listing.id && r.status !== 'cancelled')
                 return (
-                  <div key={listing.id} className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="font-semibold text-white text-lg">{listing.event_name}</h3>
-                        <p className="text-gray-400 text-sm mt-1">
-                          {[listing.event_date, listing.city, listing.category].filter(Boolean).join(' · ')}
-                        </p>
-                        {listing.description && <p className="text-gray-500 text-xs mt-1">{listing.description}</p>}
+                  <div key={listing.id} className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl overflow-hidden">
+                    {listing.image_url ? (
+                      <div className="relative h-52">
+                        <img src={listing.image_url} alt={listing.event_name} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#1A1D27] via-[#1A1D27]/50 to-transparent" />
+                        <div className="absolute bottom-0 left-0 right-0 px-5 pb-4 flex items-end justify-between">
+                          <div>
+                            <h3 className="font-bold text-white text-xl">{listing.event_name}</h3>
+                            <p className="text-gray-300 text-sm mt-0.5">{[listing.event_date, listing.city, listing.category].filter(Boolean).join(' · ')}</p>
+                          </div>
+                          <div className="text-right flex-shrink-0 ml-4">
+                            <p className="text-2xl font-bold text-white">{listing.price}€</p>
+                            <p className="text-xs text-gray-300">{listing.quantity} billet{listing.quantity > 1 ? 's' : ''}</p>
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-right flex-shrink-0 ml-4">
-                        <p className="text-2xl font-bold text-[#4F8EF7]">{listing.price}€</p>
-                        <p className="text-xs text-gray-500">{listing.quantity} billet{listing.quantity > 1 ? 's' : ''}</p>
+                    ) : (
+                      <div className="flex items-start justify-between p-5 pb-3">
+                        <div>
+                          <h3 className="font-semibold text-white text-lg">{listing.event_name}</h3>
+                          <p className="text-gray-400 text-sm mt-1">{[listing.event_date, listing.city, listing.category].filter(Boolean).join(' · ')}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0 ml-4">
+                          <p className="text-2xl font-bold text-[#4F8EF7]">{listing.price}€</p>
+                          <p className="text-xs text-gray-500">{listing.quantity} billet{listing.quantity > 1 ? 's' : ''}</p>
+                        </div>
                       </div>
-                    </div>
+                    )}
+                    <div className="px-5 pb-5">
+                      {listing.description && <p className="text-gray-500 text-xs mb-3 mt-2">{listing.description}</p>}
 
                     {myRes ? (
                       <div className={`flex items-center justify-between rounded-lg px-4 py-3 ${myRes.status === 'accepted' ? 'bg-green-500/10 border border-green-500/30' : 'bg-orange-500/10 border border-orange-500/30'}`}>
@@ -293,6 +309,7 @@ export default function ClientDashboard({ session }) {
                         </button>
                       )
                     )}
+                    </div>
                   </div>
                 )
               })}
