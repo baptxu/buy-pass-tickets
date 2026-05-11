@@ -182,15 +182,33 @@ export default function ClientDashboard({ session }) {
 
   return (
     <div className="min-h-screen bg-[#0F1117]">
-      <div className="bg-[#1A1D27] border-b border-[#2A2D3E] px-6 py-4 flex items-center justify-between">
-        <button onClick={() => setView('list')}><img src="/buypasslogo.png" alt="Buy Pass" className="h-8" /></button>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setView('cgu')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg transition-all">CGU</button>
-          <button onClick={() => setView('profile')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg transition-all">Profil</button>
-          <button onClick={() => { setView('marketplace'); fetchMarketplace() }} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg transition-all">Marketplace</button>
-          <button onClick={() => setView('community')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg transition-all">Communauté</button>
-          <span className="text-gray-400 text-sm hidden sm:block">{session.user.email}</span>
-          <button onClick={logout} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg">Déconnexion</button>
+      <div className="bg-[#1A1D27] border-b border-[#2A2D3E] px-6 py-3">
+        <div className="flex items-center justify-between">
+          <button onClick={() => setView('list')}><img src="/buypasslogo.png" alt="Buy Pass" className="h-9" /></button>
+
+          <nav className="flex items-center gap-1">
+            {[
+              { key: 'list',        icon: '🏠',  label: 'Mes demandes',  action: () => setView('list'),                           active: ['list','detail','new'].includes(view) },
+              { key: 'marketplace', icon: '🎟️',  label: 'Marketplace',   action: () => { setView('marketplace'); fetchMarketplace() }, active: view === 'marketplace' },
+              { key: 'community',   icon: '🌍',  label: 'Communauté',    action: () => setView('community'),                      active: view === 'community' },
+              { key: 'profile',     icon: '👤',  label: 'Profil',        action: () => setView('profile'),                        active: view === 'profile' },
+              { key: 'cgu',         icon: '📋',  label: 'CGU',           action: () => setView('cgu'),                            active: view === 'cgu' },
+            ].map(item => (
+              <button
+                key={item.key}
+                onClick={item.action}
+                className={`flex flex-col items-center gap-1 px-5 py-2 rounded-xl transition-all ${item.active ? 'bg-[#4F8EF7]/15 text-[#4F8EF7]' : 'text-gray-400 hover:text-white hover:bg-[#2A2D3E]'}`}
+              >
+                <span className="text-2xl leading-none">{item.icon}</span>
+                <span className="text-xs font-medium whitespace-nowrap">{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-2">
+            <span className="text-gray-500 text-xs hidden lg:block">{session.user.email}</span>
+            <button onClick={logout} className="text-xs text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1.5 rounded-lg transition-all">Déconnexion</button>
+          </div>
         </div>
       </div>
 
