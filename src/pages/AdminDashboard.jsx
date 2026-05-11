@@ -374,7 +374,7 @@ export default function AdminDashboard({ session }) {
       {/* ── SIDEBAR ── */}
       <div className="w-60 bg-[#13151F] border-r border-[#2A2D3E] flex flex-col flex-shrink-0">
         <div className="px-5 py-5 border-b border-[#2A2D3E]">
-          <div className="text-white font-bold text-lg tracking-tight">dasheet</div>
+          <img src="/buypasslogo.png" alt="Buy Pass" className="h-7 object-contain" />
           <p className="text-xs text-gray-500 mt-0.5">Admin · Workspace</p>
         </div>
 
