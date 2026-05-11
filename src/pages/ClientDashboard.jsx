@@ -56,6 +56,10 @@ export default function ClientDashboard({ session }) {
     event_type: 'Concert', event_name: '', event_date: '',
     city: '', seats: 2, category: '', budget: '', notes: ''
   })
+  const [marketplaceListings, setMarketplaceListings] = useState([])
+  const [myReservations, setMyReservations] = useState([])
+  const [reservingListing, setReservingListing] = useState(null)
+  const [reservationNotes, setReservationNotes] = useState('')
 
   async function fetchOrders() {
     const { data } = await supabase.from('orders').select('*').eq('client_id', session.user.id).order('created_at', { ascending: false })
@@ -67,9 +71,17 @@ export default function ClientDashboard({ session }) {
     setEvents(data || [])
   }
 
+  async function fetchMarketplace() {
+    const { data: listings } = await supabase.from('marketplace_listings').select('*').eq('status', 'active').order('created_at', { ascending: false })
+    setMarketplaceListings(listings || [])
+    const { data: reservations } = await supabase.from('marketplace_reservations').select('*').eq('client_id', session.user.id).order('created_at', { ascending: false })
+    setMyReservations(reservations || [])
+  }
+
   const loadDashboardData = useEffectEvent(() => {
     fetchOrders()
     fetchEvents()
+    fetchMarketplace()
   })
 
   const acceptInviteFromUrl = useEffectEvent(async () => {
@@ -152,6 +164,17 @@ export default function ClientDashboard({ session }) {
     setView('list')
   }
 
+  async function createReservation(listing) {
+    await supabase.from('marketplace_reservations').insert({ listing_id: listing.id, client_id: session.user.id, notes: reservationNotes, status: 'pending' })
+    setReservingListing(null); setReservationNotes('')
+    fetchMarketplace()
+  }
+
+  async function cancelMyReservation(id) {
+    await supabase.from('marketplace_reservations').update({ status: 'cancelled' }).eq('id', id)
+    fetchMarketplace()
+  }
+
   async function logout() { await supabase.auth.signOut() }
 
   const selectedDates = selectedEvent?.dates || []
@@ -164,6 +187,7 @@ export default function ClientDashboard({ session }) {
         <div className="flex items-center gap-3">
           <button onClick={() => setView('cgu')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg transition-all">CGU</button>
           <button onClick={() => setView('profile')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg transition-all">Profil</button>
+          <button onClick={() => { setView('marketplace'); fetchMarketplace() }} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg transition-all">Marketplace</button>
           <button onClick={() => setView('community')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg transition-all">Communauté</button>
           <span className="text-gray-400 text-sm hidden sm:block">{session.user.email}</span>
           <button onClick={logout} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-1 rounded-lg">Déconnexion</button>
@@ -191,6 +215,71 @@ export default function ClientDashboard({ session }) {
             onClearEntryNotice={() => setCommunityNotice('')}
             onBack={() => setView('list')}
           />
+        )}
+
+        {view === 'marketplace' && (
+          <>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-white">Marketplace</h2>
+                <p className="text-gray-400 text-sm mt-1">Billets disponibles à la vente — réservez votre place</p>
+              </div>
+              <button onClick={() => setView('list')} className="text-sm text-gray-400 hover:text-white border border-[#2A2D3E] px-3 py-2 rounded-lg">← Retour</button>
+            </div>
+
+            {marketplaceListings.length === 0 && (
+              <div className="text-center py-20 text-gray-500">Aucun billet disponible pour l'instant</div>
+            )}
+
+            <div className="flex flex-col gap-4">
+              {marketplaceListings.map(listing => {
+                const myRes = myReservations.find(r => r.listing_id === listing.id && r.status !== 'cancelled')
+                return (
+                  <div key={listing.id} className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl p-5">
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-semibold text-white text-lg">{listing.event_name}</h3>
+                        <p className="text-gray-400 text-sm mt-1">
+                          {[listing.event_date, listing.city, listing.category].filter(Boolean).join(' · ')}
+                        </p>
+                        {listing.description && <p className="text-gray-500 text-xs mt-1">{listing.description}</p>}
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="text-2xl font-bold text-[#4F8EF7]">{listing.price}€</p>
+                        <p className="text-xs text-gray-500">{listing.quantity} billet{listing.quantity > 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+
+                    {myRes ? (
+                      <div className={`flex items-center justify-between rounded-lg px-4 py-3 ${myRes.status === 'accepted' ? 'bg-green-500/10 border border-green-500/30' : 'bg-orange-500/10 border border-orange-500/30'}`}>
+                        <p className={`text-sm font-medium ${myRes.status === 'accepted' ? 'text-green-400' : 'text-orange-400'}`}>
+                          {myRes.status === 'accepted' ? '✓ Réservation acceptée — Buy Pass vous contacte' : '⏳ Réservation en attente de confirmation'}
+                        </p>
+                        {myRes.status === 'pending' && (
+                          <button onClick={() => cancelMyReservation(myRes.id)} className="text-xs text-gray-400 hover:text-red-400 border border-[#2A2D3E] hover:border-red-400 px-3 py-1.5 rounded-lg transition-all">Annuler</button>
+                        )}
+                      </div>
+                    ) : (
+                      reservingListing?.id === listing.id ? (
+                        <div className="bg-[#0F1117] border border-[#2A2D3E] rounded-lg p-4">
+                          <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Message (optionnel)</label>
+                          <input value={reservationNotes} onChange={e => setReservationNotes(e.target.value)} placeholder="Ex : Je prends les 2 billets ensemble..." className="w-full bg-[#1A1D27] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7] mb-3" />
+                          <div className="flex gap-2">
+                            <button onClick={() => createReservation(listing)} className="flex-1 bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white py-2.5 rounded-lg text-sm font-medium">Confirmer la réservation</button>
+                            <button onClick={() => { setReservingListing(null); setReservationNotes('') }} className="border border-[#2A2D3E] text-gray-400 px-4 py-2.5 rounded-lg text-sm">Annuler</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => setReservingListing(listing)} className="w-full bg-[#4F8EF7]/10 hover:bg-[#4F8EF7]/20 border border-[#4F8EF7]/30 text-[#4F8EF7] py-2.5 rounded-lg text-sm font-medium transition-all">
+                          Réserver temporairement
+                        </button>
+                      )
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
         )}
 
         {view === 'list' && (

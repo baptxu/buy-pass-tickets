@@ -32,7 +32,8 @@ const NAV = [
       { key: 'tickets_drop',     icon: '🎯', label: 'Drop'       },
       { key: 'tickets_analytics',icon: '📊', label: 'Analytics'  },
       { key: 'tickets_clients',  icon: '👥', label: 'Clients'    },
-      { key: 'tickets_events',   icon: '🎤', label: 'Événements' },
+      { key: 'tickets_events',      icon: '🎤', label: 'Événements'  },
+      { key: 'tickets_marketplace', icon: '🛒', label: 'Marketplace'  },
     ]
   },
   {
@@ -142,6 +143,13 @@ export default function AdminDashboard({ session }) {
   const [newDateCity, setNewDateCity] = useState('')
   const [checkedOrders, setCheckedOrders] = useState({})
 
+  // Marketplace state
+  const [marketplaceListings, setMarketplaceListings] = useState([])
+  const [marketplaceReservations, setMarketplaceReservations] = useState([])
+  const [marketplaceForm, setMarketplaceForm] = useState({ event_name: '', event_date: '', city: '', category: '', quantity: 1, price: '', description: '', status: 'active' })
+  const [editingListing, setEditingListing] = useState(null)
+  const [marketplaceTab, setMarketplaceTab] = useState('list')
+
   // Products state
   const [products, setProducts] = useState([])
   const [productForm, setProductForm] = useState({ name: '', brand: '', size: '', buy_price: '', sell_price: '', status: 'in_stock', stock: 1, notes: '' })
@@ -190,6 +198,12 @@ export default function AdminDashboard({ session }) {
     setVintedAccounts(accountsData || [])
     const { data: txData } = await supabase.from('vinted_transactions').select('*').order('created_at', { ascending: false })
     setVintedTransactions(txData || [])
+
+    // Marketplace
+    const { data: listingsData } = await supabase.from('marketplace_listings').select('*').order('created_at', { ascending: false })
+    setMarketplaceListings(listingsData || [])
+    const { data: mktResData } = await supabase.from('marketplace_reservations').select('*').order('created_at', { ascending: false })
+    setMarketplaceReservations(mktResData || [])
   }
 
   // ── TICKETS HANDLERS ───────────────────────────────────────────────────────
@@ -263,6 +277,32 @@ export default function AdminDashboard({ session }) {
     setEventForm(f => ({ ...f, dates: [...(f.dates || []), { date: newDate, city: newDateCity }] }))
     setNewDate(''); setNewDateCity('')
   }
+
+  // ── MARKETPLACE HANDLERS ───────────────────────────────────────────────────
+
+  async function saveListing() {
+    if (!marketplaceForm.event_name.trim() || !marketplaceForm.price) return
+    if (editingListing) await supabase.from('marketplace_listings').update(marketplaceForm).eq('id', editingListing.id)
+    else await supabase.from('marketplace_listings').insert(marketplaceForm)
+    setMarketplaceForm({ event_name: '', event_date: '', city: '', category: '', quantity: 1, price: '', description: '', status: 'active' })
+    setEditingListing(null); setMarketplaceTab('list'); fetchAll()
+  }
+
+  async function deleteListing(id) { await supabase.from('marketplace_listings').delete().eq('id', id); fetchAll() }
+
+  async function toggleListing(listing) {
+    await supabase.from('marketplace_listings').update({ status: listing.status === 'active' ? 'paused' : 'active' }).eq('id', listing.id)
+    fetchAll()
+  }
+
+  function startEditListing(l) {
+    setEditingListing(l)
+    setMarketplaceForm({ event_name: l.event_name, event_date: l.event_date || '', city: l.city || '', category: l.category || '', quantity: l.quantity || 1, price: l.price || '', description: l.description || '', status: l.status || 'active' })
+    setMarketplaceTab('form')
+  }
+
+  async function acceptReservation(id) { await supabase.from('marketplace_reservations').update({ status: 'accepted' }).eq('id', id); fetchAll() }
+  async function cancelReservation(id) { await supabase.from('marketplace_reservations').update({ status: 'cancelled' }).eq('id', id); fetchAll() }
 
   // ── PRODUCTS HANDLERS ──────────────────────────────────────────────────────
 
@@ -397,6 +437,9 @@ export default function AdminDashboard({ session }) {
                     <span>{item.label}</span>
                     {item.key === 'tickets_drop' && confirmedOrders.length > 0 && (
                       <span className="ml-auto text-xs bg-teal-500/20 text-teal-400 px-1.5 py-0.5 rounded-full">{confirmedOrders.length}</span>
+                    )}
+                    {item.key === 'tickets_marketplace' && marketplaceReservations.filter(r => r.status === 'pending').length > 0 && (
+                      <span className="ml-auto text-xs bg-orange-500/20 text-orange-400 px-1.5 py-0.5 rounded-full">{marketplaceReservations.filter(r => r.status === 'pending').length}</span>
                     )}
                   </button>
                 )
@@ -1199,6 +1242,112 @@ export default function AdminDashboard({ session }) {
               </Card>
             </>
           )}
+
+          {/* ════════════════════ MARKETPLACE ════════════════════ */}
+
+          {view === 'tickets_marketplace' && (() => {
+            const pendingCount = marketplaceReservations.filter(r => r.status === 'pending').length
+            return (
+              <>
+                <SectionHeader title="Marketplace" sub={`${marketplaceListings.filter(l => l.status === 'active').length} annonce${marketplaceListings.filter(l => l.status === 'active').length !== 1 ? 's' : ''} active${marketplaceListings.filter(l => l.status === 'active').length !== 1 ? 's' : ''}`}>
+                  <button
+                    onClick={() => { setMarketplaceTab(t => t === 'form' ? 'list' : 'form'); setEditingListing(null); setMarketplaceForm({ event_name: '', event_date: '', city: '', category: '', quantity: 1, price: '', description: '', status: 'active' }) }}
+                    className="text-xs bg-[#4F8EF7]/20 text-[#4F8EF7] border border-[#4F8EF7]/30 px-3 py-1.5 rounded-lg hover:bg-[#4F8EF7]/30 transition-all"
+                  >
+                    {marketplaceTab === 'form' ? '← Annonces' : '+ Nouvelle annonce'}
+                  </button>
+                </SectionHeader>
+
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <StatCard label="Annonces actives" value={marketplaceListings.filter(l => l.status === 'active').length} color="text-[#4F8EF7]" />
+                  <StatCard label="Réservations en attente" value={pendingCount} color="text-orange-400" />
+                  <StatCard label="Réservations acceptées" value={marketplaceReservations.filter(r => r.status === 'accepted').length} color="text-green-400" />
+                </div>
+
+                {marketplaceTab === 'form' && (
+                  <Card className="p-6 mb-6 max-w-xl">
+                    <h3 className="text-white font-semibold mb-4">{editingListing ? '✏️ Modifier l\'annonce' : '➕ Nouvelle annonce'}</h3>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      {[['Événement', 'event_name', 'Ex : Beyoncé – Paris'], ['Date', 'event_date', '15/09/2026'], ['Ville', 'city', 'Paris'], ['Catégorie', 'category', 'Fosse'], ['Quantité', 'quantity', '2'], ['Prix (€)', 'price', '150']].map(([label, field, ph]) => (
+                        <div key={field}>
+                          <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">{label}</label>
+                          <input value={marketplaceForm[field]} onChange={e => setMarketplaceForm(f => ({ ...f, [field]: e.target.value }))} placeholder={ph} className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7]" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mb-4">
+                      <label className="text-xs text-gray-400 uppercase tracking-wider mb-1 block">Description</label>
+                      <textarea value={marketplaceForm.description} onChange={e => setMarketplaceForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Billets authentiques, prix ferme..." className="w-full bg-[#0F1117] border border-[#2A2D3E] rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4F8EF7] resize-none" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={saveListing} className="flex-1 bg-[#4F8EF7] hover:bg-[#3a7ae0] text-white py-2.5 rounded-lg text-sm font-medium">{editingListing ? 'Modifier' : 'Publier'}</button>
+                      <button onClick={() => { setMarketplaceTab('list'); setEditingListing(null) }} className="border border-[#2A2D3E] text-gray-400 px-4 py-2.5 rounded-lg text-sm">Annuler</button>
+                    </div>
+                  </Card>
+                )}
+
+                <div className="flex flex-col gap-3 mb-8">
+                  {marketplaceListings.length === 0 && <EmptyState text="Aucune annonce dans la marketplace" />}
+                  {marketplaceListings.map(listing => {
+                    const listingRes = marketplaceReservations.filter(r => r.listing_id === listing.id && r.status === 'pending')
+                    return (
+                      <Card key={listing.id} className={`p-5 transition-all ${listing.status === 'paused' ? 'opacity-60' : ''}`}>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-white font-semibold">{listing.event_name}</p>
+                            <p className="text-gray-400 text-xs mt-0.5">{listing.event_date}{listing.city ? ` · ${listing.city}` : ''}{listing.category ? ` · ${listing.category}` : ''}</p>
+                            {listing.description && <p className="text-gray-500 text-xs mt-1">{listing.description}</p>}
+                          </div>
+                          <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                            <span className="text-[#4F8EF7] font-bold">{listing.price}€ <span className="text-gray-500 font-normal text-xs">× {listing.quantity}</span></span>
+                            <button onClick={() => toggleListing(listing)} className={`text-xs px-2 py-1 rounded-full ${listing.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>{listing.status === 'active' ? '● Actif' : '○ Pausé'}</button>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#2A2D3E]">
+                          <span className={`text-xs ${listingRes.length > 0 ? 'text-orange-400 font-medium' : 'text-gray-500'}`}>{listingRes.length} réservation{listingRes.length !== 1 ? 's' : ''} en attente</span>
+                          <div className="flex gap-2">
+                            <button onClick={() => startEditListing(listing)} className="text-xs border border-[#2A2D3E] hover:border-[#4F8EF7] text-gray-300 hover:text-[#4F8EF7] px-3 py-1.5 rounded-lg transition-all">Modifier</button>
+                            <button onClick={() => deleteListing(listing.id)} className="text-xs border border-[#2A2D3E] hover:border-red-400 text-gray-300 hover:text-red-400 px-3 py-1.5 rounded-lg transition-all">Supprimer</button>
+                          </div>
+                        </div>
+                      </Card>
+                    )
+                  })}
+                </div>
+
+                {pendingCount > 0 && (
+                  <>
+                    <h3 className="text-white font-semibold mb-3">Réservations en attente ({pendingCount})</h3>
+                    <Card className="overflow-hidden">
+                      <table className="w-full">
+                        <thead><tr className="border-b border-[#2A2D3E]">{['Client', 'Annonce', 'Date', 'Notes', 'Actions'].map(h => <th key={h} className="px-4 py-3 text-left text-xs text-gray-500 uppercase tracking-wider">{h}</th>)}</tr></thead>
+                        <tbody>
+                          {marketplaceReservations.filter(r => r.status === 'pending').map(r => {
+                            const listing = marketplaceListings.find(l => l.id === r.listing_id)
+                            const client = profiles[r.client_id]
+                            return (
+                              <tr key={r.id} className="border-b border-[#2A2D3E] hover:bg-[#1E2130] transition-colors">
+                                <td className="px-4 py-3"><p className="text-sm font-medium text-white">{client?.full_name || 'Client'}</p><p className="text-xs text-gray-500">{client?.phone || ''}</p></td>
+                                <td className="px-4 py-3"><p className="text-sm text-white">{listing?.event_name || '—'}</p><p className="text-xs text-gray-500">{listing ? `${listing.price}€ × ${listing.quantity}` : ''}</p></td>
+                                <td className="px-4 py-3 text-sm text-gray-400">{new Date(r.created_at).toLocaleDateString('fr-FR')}</td>
+                                <td className="px-4 py-3 text-sm text-gray-400">{r.notes || '—'}</td>
+                                <td className="px-4 py-3">
+                                  <div className="flex gap-2">
+                                    <button onClick={() => acceptReservation(r.id)} className="text-xs bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 px-3 py-1.5 rounded-lg transition-all">✓ Accepter</button>
+                                    <button onClick={() => cancelReservation(r.id)} className="text-xs border border-[#2A2D3E] hover:border-red-400 text-gray-300 hover:text-red-400 px-3 py-1.5 rounded-lg transition-all">✕ Refuser</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </Card>
+                  </>
+                )}
+              </>
+            )
+          })()}
 
           {view === 'vinted_favorites' && (
             <>
