@@ -257,16 +257,17 @@ export default function ClientDashboard({ session }) {
             <div className="flex flex-col gap-4">
               {marketplaceListings.map(listing => {
                 const myRes = myReservations.find(r => r.listing_id === listing.id && r.status !== 'cancelled')
+                const pendingCount = listingCounts[listing.id] ?? (myRes?.status === 'pending' ? 1 : 0)
                 return (
                   <div key={listing.id} className="bg-[#1A1D27] border border-[#2A2D3E] rounded-xl overflow-hidden">
                     {listing.image_url ? (
                       <div className="relative h-52">
                         <img src={listing.image_url} alt={listing.event_name} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-gradient-to-t from-[#1A1D27] via-[#1A1D27]/50 to-transparent" />
-                        {listingCounts[listing.id] > 0 && (
+                        {pendingCount > 0 && (
                           <div className="absolute top-3 left-3">
                             <span className="flex items-center gap-1.5 bg-orange-500/90 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg">
-                              🔥 {listingCounts[listing.id]} personne{listingCounts[listing.id] > 1 ? 's' : ''} intéressée{listingCounts[listing.id] > 1 ? 's' : ''}
+                              🔥 {pendingCount} personne{pendingCount > 1 ? 's' : ''} intéressée{pendingCount > 1 ? 's' : ''}
                             </span>
                           </div>
                         )}
@@ -295,10 +296,10 @@ export default function ClientDashboard({ session }) {
                     )}
                     <div className="px-5 pb-5">
                       {listing.description && <p className="text-gray-500 text-xs mb-3 mt-2">{listing.description}</p>}
-                      {!listing.image_url && listingCounts[listing.id] > 0 && (
+                      {!listing.image_url && pendingCount > 0 && (
                         <div className="flex items-center gap-1.5 text-orange-400 text-xs font-semibold mb-3">
                           <span>🔥</span>
-                          <span>{listingCounts[listing.id]} personne{listingCounts[listing.id] > 1 ? 's' : ''} intéressée{listingCounts[listing.id] > 1 ? 's' : ''}</span>
+                          <span>{pendingCount} personne{pendingCount > 1 ? 's' : ''} intéressée{pendingCount > 1 ? 's' : ''}</span>
                         </div>
                       )}
 
