@@ -58,6 +58,7 @@ export default function ClientDashboard({ session }) {
   })
   const [marketplaceListings, setMarketplaceListings] = useState([])
   const [myReservations, setMyReservations] = useState([])
+  const [listingCounts, setListingCounts] = useState({})
   const [reservingListing, setReservingListing] = useState(null)
   const [reservationNotes, setReservationNotes] = useState('')
 
@@ -76,6 +77,10 @@ export default function ClientDashboard({ session }) {
     setMarketplaceListings(listings || [])
     const { data: reservations } = await supabase.from('marketplace_reservations').select('*').eq('client_id', session.user.id).order('created_at', { ascending: false })
     setMyReservations(reservations || [])
+    const { data: counts } = await supabase.rpc('get_listing_reservation_counts')
+    const countsMap = {}
+    counts?.forEach(c => { countsMap[c.listing_id] = Number(c.pending_count) })
+    setListingCounts(countsMap)
   }
 
   const loadDashboardData = useEffectEvent(() => {
@@ -258,6 +263,13 @@ export default function ClientDashboard({ session }) {
                       <div className="relative h-52">
                         <img src={listing.image_url} alt={listing.event_name} className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-gradient-to-t from-[#1A1D27] via-[#1A1D27]/50 to-transparent" />
+                        {listingCounts[listing.id] > 0 && (
+                          <div className="absolute top-3 left-3">
+                            <span className="flex items-center gap-1.5 bg-orange-500/90 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg">
+                              🔥 {listingCounts[listing.id]} personne{listingCounts[listing.id] > 1 ? 's' : ''} intéressée{listingCounts[listing.id] > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        )}
                         <div className="absolute bottom-0 left-0 right-0 px-5 pb-4 flex items-end justify-between">
                           <div>
                             <h3 className="font-bold text-white text-xl">{listing.event_name}</h3>
@@ -283,6 +295,12 @@ export default function ClientDashboard({ session }) {
                     )}
                     <div className="px-5 pb-5">
                       {listing.description && <p className="text-gray-500 text-xs mb-3 mt-2">{listing.description}</p>}
+                      {!listing.image_url && listingCounts[listing.id] > 0 && (
+                        <div className="flex items-center gap-1.5 text-orange-400 text-xs font-semibold mb-3">
+                          <span>🔥</span>
+                          <span>{listingCounts[listing.id]} personne{listingCounts[listing.id] > 1 ? 's' : ''} intéressée{listingCounts[listing.id] > 1 ? 's' : ''}</span>
+                        </div>
+                      )}
 
                     {myRes ? (
                       <div className={`flex items-center justify-between rounded-lg px-4 py-3 ${myRes.status === 'accepted' ? 'bg-green-500/10 border border-green-500/30' : 'bg-orange-500/10 border border-orange-500/30'}`}>
